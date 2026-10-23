@@ -5,6 +5,15 @@ import { buyToken, createToken, launchCost, sellToken } from './sim/launchpad';
 import { RNG, hashString, randomSeed } from './sim/rng';
 import { makeMemeName, makeShitName } from './sim/names';
 import { createBots } from './sim/bots';
+import {
+  blackTrade,
+  buildFactory,
+  buyCommodity,
+  normalizeWorld,
+  sellCommodity,
+  shipCommodity,
+  trimWorld
+} from './sim/world';
 import { clearState, loadState, saveState } from './lib/persist';
 import type {
   AssetClass,
@@ -16,7 +25,17 @@ import type {
   SimState
 } from './sim/types';
 
-export type Tab = 'market' | 'trade' | 'portfolio' | 'news' | 'launchpad' | 'rank' | 'settings';
+export type Tab =
+  | 'home'
+  | 'market'
+  | 'world'
+  | 'trade'
+  | 'portfolio'
+  | 'news'
+  | 'launchpad'
+  | 'rank'
+  | 'settings'
+  | 'more';
 export type Timeframe = '1h' | '4h' | '1D' | '1W';
 
 export interface Toast {
@@ -26,7 +45,7 @@ export interface Toast {
 }
 
 interface SaveBlob {
-  version: 2;
+  version: 3;
   settings: Settings;
   sim: SimState;
   watchlist: string[];
@@ -88,6 +107,7 @@ function normalizeSim(sim: SimState, startingCash: number): SimState {
     if (pos.trail === undefined) pos.trail = null;
     if (typeof pos.trailPeak !== 'number') pos.trailPeak = 0;
   }
+  sim.world = normalizeWorld(sim.world, sim.seed, sim.ticks);
   for (const bot of sim.bots) {
     if (!Array.isArray(bot.holdings)) bot.holdings = [];
     if (!Number.isFinite(bot.startEquity) || bot.startEquity <= 0) bot.startEquity = startingCash;
@@ -122,6 +142,7 @@ function trimSim(sim: SimState): SimState {
   if (out.fills.length > 120) out.fills = out.fills.slice(0, 120);
   if (out.equityCurve.length > 600) out.equityCurve = out.equityCurve.slice(-600);
   if (out.notices.length > 20) out.notices = out.notices.slice(-20);
+  trimWorld(out.world);
   return out;
 }
 
@@ -139,12 +160,14 @@ interface Store {
   v: number;
   toast: Toast | null;
   watchlist: string[];
+  worldCountry: string;
   booted: boolean;
   saving: boolean;
 
   boot: () => Promise<void>;
   setTab: (t: Tab) => void;
   select: (id: string) => void;
+  setWorldCountry: (id: string) => void;
   setSearch: (s: string) => void;
   setFilter: (f: AssetClass | 'all' | 'watch') => void;
   setTf: (t: Timeframe) => void;
@@ -171,6 +194,12 @@ interface Store {
   startDaily: () => void;
   exitDaily: () => void;
 
+  worldBuy: (country: string, commodity: string, qty: number) => void;
+  worldSell: (country: string, commodity: string, qty: number) => void;
+  worldShip: (from: string, to: string, commodity: string, qty: number) => void;
+  worldBuild: (commodity: string) => void;
+  worldBlack: (country: string, commodity: string, side: 'buy' | 'sell', qty: number) => void;
+
   launch: (name: string, ticker: string, kind: 'meme' | 'shitcoin', tags: string[]) => void;
   buyTok: (tokenId: string, usd: number) => void;
   sellTok: (tokenId: string, units: number) => void;
@@ -185,7 +214,7 @@ interface Store {
 export const useStore = create<Store>((set, get) => ({
   sim: createSim(DEFAULT_SETTINGS),
   settings: DEFAULT_SETTINGS,
-  tab: 'market',
+  tab: 'home',
   selectedId: 'BN',
   search: '',
   filter: 'all',
@@ -194,20 +223,34 @@ export const useStore = create<Store>((set, get) => ({
   v: 0,
   toast: null,
   watchlist: ['BN', 'EF', 'DGE'],
+  worldCountry: 'ID',
   booted: false,
   saving: false,
 
   boot: async () => {
     const hash = (window.location.hash || '').replace('#/', '') as Tab;
-    const valid: Tab[] = ['market', 'trade', 'portfolio', 'news', 'launchpad', 'rank', 'settings'];
-    const initialTab = valid.includes(hash) ? hash : 'market';
+    const valid: Tab[] = [
+      'home',
+      'market',
+      'world',
+      'trade',
+      'portfolio',
+      'news',
+      'launchpad',
+      'rank',
+      'settings',
+      'more'
+    ];
+    const initialTab = valid.includes(hash) ? hash : 'home';
     const blob = await loadState<SaveBlob>();
     if (blob && blob.sim && blob.sim.instruments) {
       const settings = { ...DEFAULT_SETTINGS, ...blob.settings };
+      const sim = normalizeSim(blob.sim, settings.startingCash);
       set({
-        sim: normalizeSim(blob.sim, settings.startingCash),
+        sim,
         settings,
         watchlist: blob.watchlist?.length ? blob.watchlist : get().watchlist,
+        worldCountry: sim.world.home,
         tab: initialTab,
         booted: true
       });
@@ -226,6 +269,7 @@ export const useStore = create<Store>((set, get) => ({
     }
   },
   select: (id) => set({ selectedId: id }),
+  setWorldCountry: (id) => set({ worldCountry: id }),
   setSearch: (s) => set({ search: s }),
   setFilter: (f) => set({ filter: f }),
   setTf: (t) => set({ tf: t }),
@@ -306,6 +350,41 @@ export const useStore = create<Store>((set, get) => ({
     set((s) => ({ v: s.v + 1 }));
   },
 
+  worldBuy: (country, commodity, qty) => {
+    const { sim, notify } = get();
+    const res = buyCommodity(sim, country, commodity, qty);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  worldSell: (country, commodity, qty) => {
+    const { sim, notify } = get();
+    const res = sellCommodity(sim, country, commodity, qty);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  worldShip: (from, to, commodity, qty) => {
+    const { sim, notify } = get();
+    const res = shipCommodity(sim, from, to, commodity, qty);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  worldBuild: (commodity) => {
+    const { sim, notify } = get();
+    const res = buildFactory(sim, commodity);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  worldBlack: (country, commodity, side, qty) => {
+    const { sim, notify } = get();
+    const res = blackTrade(sim, country, commodity, side, qty);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
   setRisk: (posId, tp, sl, trail) => {
     const { sim, notify } = get();
     const res = setBracket(sim, posId, tp, sl, trail);
@@ -341,6 +420,7 @@ export const useStore = create<Store>((set, get) => ({
       settings: next,
       watchlist: ['BN', 'EF', 'DGE'],
       selectedId: 'BN',
+      worldCountry: sim.world.home,
       tab: 'market'
     });
     set((st) => ({ v: st.v + 1 }));
@@ -351,7 +431,7 @@ export const useStore = create<Store>((set, get) => ({
     const s = get().settings;
     const next: Settings = { ...s, seed: randomSeed() };
     const sim = createSim(next);
-    set({ sim, settings: next, selectedId: 'BN', watchlist: ['BN', 'EF', 'DGE'], tab: 'market' });
+    set({ sim, settings: next, selectedId: 'BN', watchlist: ['BN', 'EF', 'DGE'], worldCountry: sim.world.home, tab: 'market' });
     set((st) => ({ v: st.v + 1 }));
     get().notify('Mode harian selesai. Dunia normal baru dibuat.', 'ok');
   },
@@ -399,14 +479,14 @@ export const useStore = create<Store>((set, get) => ({
       startingCash: cash ?? s.startingCash
     };
     const sim = createSim(next);
-    set({ sim, settings: next, watchlist: ['BN', 'EF', 'DGE'], selectedId: 'BN', tab: 'market' });
+    set({ sim, settings: next, watchlist: ['BN', 'EF', 'DGE'], selectedId: 'BN', worldCountry: sim.world.home, tab: 'market' });
     set((st) => ({ v: st.v + 1 }));
   },
 
   save: async () => {
     const { sim, settings, watchlist } = get();
     set({ saving: true });
-    const blob: SaveBlob = { version: 2, settings, sim: trimSim(sim), watchlist };
+    const blob: SaveBlob = { version: 3, settings, sim: trimSim(sim), watchlist };
     const ok = await saveState(blob);
     set({ saving: false });
     if (!ok) get().notify('Gagal menyimpan progres', 'err');
@@ -414,7 +494,7 @@ export const useStore = create<Store>((set, get) => ({
 
   exportSave: () => {
     const { sim, settings, watchlist } = get();
-    const blob: SaveBlob = { version: 2, settings, sim: trimSim(sim), watchlist };
+    const blob: SaveBlob = { version: 3, settings, sim: trimSim(sim), watchlist };
     const text = JSON.stringify(blob);
     const blobUrl = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
     const a = document.createElement('a');
@@ -429,10 +509,12 @@ export const useStore = create<Store>((set, get) => ({
       const blob = JSON.parse(text) as SaveBlob;
       if (!blob.sim?.instruments) throw new Error('format salah');
       const settings = { ...DEFAULT_SETTINGS, ...blob.settings };
+      const sim = normalizeSim(blob.sim, settings.startingCash);
       set({
-        sim: normalizeSim(blob.sim, settings.startingCash),
+        sim,
         settings,
-        watchlist: blob.watchlist ?? []
+        watchlist: blob.watchlist ?? [],
+        worldCountry: sim.world.home
       });
       set((s) => ({ v: s.v + 1 }));
       get().notify('Save berhasil diimport', 'ok');

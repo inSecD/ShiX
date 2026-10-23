@@ -1,23 +1,27 @@
 import { useStore, type Tab } from '../store';
 
 const TABS: { id: Tab; icon: string; label: string }[] = [
+  { id: 'home', icon: '🏠', label: 'Home' },
   { id: 'market', icon: '📊', label: 'Market' },
-  { id: 'trade', icon: '⚡', label: 'Trade' },
+  { id: 'world', icon: '🌍', label: 'World' },
   { id: 'portfolio', icon: '💼', label: 'Porto' },
-  { id: 'news', icon: '📰', label: 'Berita' },
-  { id: 'launchpad', icon: '🚀', label: 'Launch' },
-  { id: 'rank', icon: '🏆', label: 'Rank' },
-  { id: 'settings', icon: '⚙️', label: 'Setelan' }
+  { id: 'rank', icon: '🏆', label: 'Rank' }
 ];
 
 export function BottomNav() {
   const tab = useStore((s) => s.tab);
   const setTab = useStore((s) => s.setTab);
 
+  const active = (id: Tab) => {
+    if (tab === id) return true;
+    if (id === 'market' && tab === 'trade') return true;
+    return false;
+  };
+
   return (
     <nav className="bottom-nav">
       {TABS.map((t) => (
-        <button key={t.id} className={`nav-btn ${tab === t.id ? 'on' : ''}`} onClick={() => setTab(t.id)}>
+        <button key={t.id} className={`nav-btn ${active(t.id) ? 'on' : ''}`} onClick={() => setTab(t.id)}>
           <span className="ico">{t.icon}</span>
           <span>{t.label}</span>
         </button>

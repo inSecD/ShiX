@@ -1,5 +1,5 @@
 import { useStore } from '../store';
-import { equity, unrealizedPnl } from '../sim/engine';
+import { equity } from '../sim/engine';
 import { fmtClock, fmtPct, fmtUsd } from '../lib/format';
 
 const SPEEDS = [
@@ -12,20 +12,17 @@ const SPEEDS = [
 
 export function TopBar() {
   const sim = useStore((s) => s.sim);
+  const settings = useStore((s) => s.settings);
   const v = useStore((s) => s.v);
   const speed = useStore((s) => s.speed);
   const setSpeed = useStore((s) => s.setSpeed);
-
-  const eq = equity(sim);
-  const upnl = unrealizedPnl(sim);
-  const dayStart = sim.order.length
-    ? sim.instruments[sim.order[0]]?.open ?? 0
-    : 0;
-  void dayStart;
+  const setTab = useStore((s) => s.setTab);
+  const tab = useStore((s) => s.tab);
   void v;
 
-  const startEq = sim.equityCurve[0] ?? eq;
-  const changePct = startEq > 0 ? ((eq - startEq) / startEq) * 100 : 0;
+  const eq = equity(sim);
+  const base = sim.challenge?.startEquity ?? settings.startingCash;
+  const changePct = base > 0 ? ((eq - base) / base) * 100 : 0;
 
   return (
     <header className="topbar">
@@ -34,42 +31,21 @@ export function TopBar() {
           Shi<span>X</span>
         </div>
         <span className="regime">{sim.macro.regime}</span>
-        <div style={{ flex: 1 }} />
-        <span className="tiny muted mono">
-          {sim.instruments[sim.order[0]] ? '' : ''}
-          {sim.macro.rate.toFixed(2)}% · USD {sim.macro.usd >= 0 ? '+' : ''}
-          {(sim.macro.usd * 100).toFixed(0)}
-        </span>
+        <div className="topbar-equity">
+          <span className="val">{fmtUsd(eq, true)}</span>
+          <span className={`ret ${changePct >= 0 ? 'up' : 'down'}`}>{fmtPct(changePct)}</span>
+        </div>
+        <button
+          className={`icon-btn ${tab === 'more' || tab === 'settings' || tab === 'news' || tab === 'launchpad' ? 'on' : ''}`}
+          onClick={() => setTab('more')}
+          aria-label="Menu"
+          title="Menu"
+        >
+          ☰
+        </button>
       </div>
 
-      <div className="stat-row">
-        <div className="stat">
-          <div className="k">Equity</div>
-          <div className="v">{fmtUsd(eq, true)}</div>
-        </div>
-        <div className="stat">
-          <div className="k">Cash</div>
-          <div className="v">{fmtUsd(sim.cash, true)}</div>
-        </div>
-        <div className="stat">
-          <div className="k">Margin</div>
-          <div className="v">{fmtUsd(sim.locked, true)}</div>
-        </div>
-        <div className="stat">
-          <div className="k">Unrealized</div>
-          <div className={`v ${upnl >= 0 ? 'up' : 'down'}`}>{fmtUsd(upnl, true)}</div>
-        </div>
-        <div className="stat">
-          <div className="k">Return</div>
-          <div className={`v ${changePct >= 0 ? 'up' : 'down'}`}>{fmtPct(changePct)}</div>
-        </div>
-        <div className="stat">
-          <div className="k">Realized</div>
-          <div className={`v ${sim.realized >= 0 ? 'up' : 'down'}`}>{fmtUsd(sim.realized, true)}</div>
-        </div>
-      </div>
-
-      <div className="speed-row">
+      <div className="topbar-foot">
         {SPEEDS.map((s) => (
           <button
             key={s.v}

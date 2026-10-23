@@ -1,3 +1,5 @@
+import type { WorldState } from './world';
+
 export type AssetClass =
   | 'crypto'
   | 'meme'
@@ -235,4 +237,5 @@ export interface SimState {
   bots: Bot[];
   challenge: Challenge | null;
   notices: string[];
+  world: WorldState;
 }

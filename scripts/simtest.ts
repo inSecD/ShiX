@@ -1,5 +1,15 @@
 import { createSim, tick, equity, unrealizedPnl } from '../src/sim/engine';
 import { placeOrder, closePositionById, setBracket } from '../src/sim/trading';
+import {
+  blackOffers,
+  blackTrade,
+  buildFactory,
+  buyCommodity,
+  grantXp,
+  holdingQty,
+  holdingsValue,
+  shipCommodity
+} from '../src/sim/world';
 import type { Settings, SimState } from '../src/sim/types';
 
 const settings: Settings = {
@@ -194,4 +204,39 @@ function openLong(sim: SimState) {
     '| notice:',
     sim.notices.find(n => n.includes('TANTANGAN')) ?? sim.notices[0]
   );
+}
+
+// ---------- world economy ----------
+{
+  const sim = freshSim();
+  const world = sim.world;
+  const marketCount = Object.keys(world.markets).length;
+  let badMarket = 0;
+  for (const m of Object.values(world.markets)) {
+    if (!Number.isFinite(m.price) || m.price <= 0 || !Number.isFinite(m.supply) || !Number.isFinite(m.demand)) badMarket++;
+  }
+  const startEq = equity(sim);
+  const buy = buyCommodity(sim, 'ID', 'food', 100);
+  const afterBuyEq = equity(sim);
+  const buyHolding = holdingQty(world, 'ID', 'food');
+  console.log('world markets:', marketCount, '| bad:', badMarket, '| buy:', buy.ok, '| holding:', buyHolding.toFixed(2));
+  console.log('equity marks commodity:', (afterBuyEq - startEq).toFixed(2), '| world value:', holdingsValue(world).toFixed(2));
+
+  const ship = shipCommodity(sim, 'ID', 'SG', 'food', 50);
+  for (let i = 0; i < 30; i++) tick(sim, settings);
+  const arrived = world.shipments.find((s) => s.from === 'ID' && s.to === 'SG' && s.status === 'arrived');
+  console.log('world ship:', ship.ok, '| arrived:', Boolean(arrived), '| SG holding:', holdingQty(world, 'SG', 'food').toFixed(2));
+
+  const factory = buildFactory(sim, 'food');
+  for (let i = 0; i < 5; i++) tick(sim, settings);
+  console.log('factory build:', factory.ok, '| level:', world.factories.find((f) => f.commodity === 'food')?.level, '| produced:', holdingQty(world, world.home, 'food').toFixed(2));
+
+  const locked = blackTrade(sim, 'ID', 'food', 'buy', 10);
+  grantXp(world, 1000);
+  const m = world.markets['ID:food'];
+  m.supply = m.demand * 1.2;
+  const offers = blackOffers(world, 'ID');
+  const offer = offers.find((o) => o.side === 'buy');
+  const black = offer ? blackTrade(sim, 'ID', offer.commodity, 'buy', 10) : { ok: false, msg: 'no offer' };
+  console.log('black locked:', !locked.ok, '| level:', world.level, '| offers:', offers.length, '| trade:', black.ok, '| seized:', world.stats.blackSeized);
 }

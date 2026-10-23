@@ -10,6 +10,7 @@ import {
 } from './trading';
 import { spawnAiToken, tickTokens } from './launchpad';
 import { createBots, tickBots } from './bots';
+import { createWorld, worldAssetsValue, worldTick } from './world';
 import type { AssetClass, Candle, Fill, Instrument, Position, Settings, SimState } from './types';
 
 export const HOUR = 3_600_000;
@@ -175,7 +176,8 @@ export function createSim(settings: Settings): SimState {
     nextEventAt: Date.UTC(2026, 0, 5, 13, 30) + 2 * HOUR,
     bots: createBots(settings.startingCash),
     challenge: null,
-    notices: []
+    notices: [],
+    world: createWorld(settings.seed)
   };
 
   for (let i = 0; i < 72; i++) tick(state, settings, true);
@@ -206,6 +208,24 @@ export function tick(state: SimState, settings: Settings, warmup = false): void 
     const inst = state.instruments[id];
     if (!inst) continue;
     updateInstrument(inst, state, rng);
+  }
+
+  const worldNews = worldTick(state.world, state);
+  if (!warmup) {
+    for (const ev of worldNews.slice(0, 2)) {
+      state.events.unshift({
+        id: ev.id,
+        t: state.simTime,
+        title: ev.title,
+        body: ev.body,
+        severity: ev.severity,
+        tags: ev.tags,
+        impact: 0,
+        instId: null,
+        sector: null,
+        cls: null
+      });
+    }
   }
 
   if (!warmup) {
@@ -606,7 +626,7 @@ export function unrealizedPnl(state: SimState): number {
 }
 
 export function equity(state: SimState): number {
-  return state.cash + state.locked + unrealizedPnl(state);
+  return state.cash + state.locked + unrealizedPnl(state) + worldAssetsValue(state.world);
 }
 
 export function updateHypeIndex(state: SimState): void {

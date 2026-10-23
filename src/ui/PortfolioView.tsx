@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useStore } from '../store';
 import { equity, unrealizedPnl } from '../sim/engine';
 import { positionPnl } from '../sim/trading';
+import { holdingsPnl, worldAssetsValue } from '../sim/world';
 import { fmtPct, fmtPrice, fmtQty, fmtUsd, fmtTime } from '../lib/format';
 
 function Sparkline({ data, up }: { data: number[]; up: boolean }) {
@@ -43,6 +44,10 @@ export function PortfolioView() {
   const eq = equity(sim);
   const upnl = unrealizedPnl(sim);
   const curve = sim.equityCurve;
+  const worldValue = worldAssetsValue(sim.world);
+  const worldPnl = holdingsPnl(sim.world);
+  const worldHoldings = sim.world.holdings.length;
+  const transit = sim.world.shipments.filter((s) => s.status === 'in_transit').length;
 
   return (
     <div>
@@ -54,7 +59,7 @@ export function PortfolioView() {
           </button>
         </div>
         <div className="panel-body">
-          <div className="grid3">
+          <div className="grid4">
             <div>
               <div className="tiny muted">Equity</div>
               <div className="mono" style={{ fontSize: 17, fontWeight: 800 }}>{fmtUsd(eq)}</div>
@@ -69,8 +74,34 @@ export function PortfolioView() {
                 {fmtUsd(upnl)}
               </div>
             </div>
+            <div>
+              <div className="tiny muted">Komoditas</div>
+              <div className="mono" style={{ fontSize: 15, fontWeight: 700 }}>{fmtUsd(worldValue)}</div>
+              <div className={`tiny mono ${worldPnl >= 0 ? 'up' : 'down'}`}>{fmtUsd(worldPnl)}</div>
+            </div>
           </div>
           <Sparkline data={curve} up={upnl >= 0} />
+        </div>
+      </div>
+
+      <div className="panel">
+        <div className="panel-head">
+          <span>Aset Dunia</span>
+          <button className="ghost tiny" onClick={() => setTab('world')}>Buka</button>
+        </div>
+        <div className="panel-body">
+          <div className="row between tiny">
+            <span className="muted">Komoditas · {worldHoldings} stok</span>
+            <b className="mono">{fmtUsd(worldValue)}</b>
+          </div>
+          <div className="row between tiny" style={{ marginTop: 6 }}>
+            <span className="muted">Pengiriman aktif</span>
+            <b className="mono">{transit}</b>
+          </div>
+          <div className="row between tiny" style={{ marginTop: 6 }}>
+            <span className="muted">Pabrik · level intel</span>
+            <b className="mono">{sim.world.factories.length} · L{sim.world.level}</b>
+          </div>
         </div>
       </div>
 

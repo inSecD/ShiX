@@ -24,7 +24,6 @@ export function MarketView() {
   const setFilter = useStore((s) => s.setFilter);
   const selectedId = useStore((s) => s.selectedId);
   const select = useStore((s) => s.select);
-  const setTab = useStore((s) => s.setTab);
   const watchlist = useStore((s) => s.watchlist);
   void v;
 
@@ -84,10 +83,7 @@ export function MarketView() {
           <div
             key={i.id}
             className={`mrow ${selectedId === i.id ? 'sel' : ''}`}
-            onClick={() => {
-              select(i.id);
-              setTab('trade');
-            }}
+            onClick={() => select(i.id)}
           >
             <div style={{ minWidth: 0 }}>
               <div className="sym">

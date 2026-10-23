@@ -15,7 +15,7 @@ const TYPES: { id: OrderType; label: string }[] = [
 
 const pxText = (v: number) => String(+v.toPrecision(6));
 
-export function TradePanel() {
+export function TradePanel({ embedded = false }: { embedded?: boolean }) {
   const sim = useStore((s) => s.sim);
   const v = useStore((s) => s.v);
   const selectedId = useStore((s) => s.selectedId);
@@ -97,8 +97,8 @@ export function TradePanel() {
   };
 
   return (
-    <div>
-      <ChartView inst={inst} tf={tf} />
+    <div className={`trade-panel ${embedded ? 'embedded' : ''}`}>
+      {!embedded && <ChartView inst={inst} tf={tf} />}
 
       <div className="panel">
         <div className="panel-head">
