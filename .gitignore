@@ -11,3 +11,6 @@ scripts/.simtest.cjs
 npm-debug.log*
 
 *.tsbuildinfo
+
+# Kiro config
+.kiro/

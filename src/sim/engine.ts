@@ -161,6 +161,7 @@ export function createSim(settings: Settings): SimState {
     instruments,
     order,
     positions: {},
+    spotHoldings: {},
     orders: {},
     events: [],
     fills: [],
@@ -625,8 +626,32 @@ export function unrealizedPnl(state: SimState): number {
   return total;
 }
 
+export function spotValue(state: SimState): number {
+  let total = 0;
+  for (const holding of Object.values(state.spotHoldings)) {
+    const inst = state.instruments[holding.instId];
+    if (inst) total += inst.price * holding.qty;
+  }
+  return total;
+}
+
+export function spotUnrealizedPnl(state: SimState): number {
+  let total = 0;
+  for (const holding of Object.values(state.spotHoldings)) {
+    const inst = state.instruments[holding.instId];
+    if (inst) total += (inst.price - holding.avgCost) * holding.qty;
+  }
+  return total;
+}
+
 export function equity(state: SimState): number {
-  return state.cash + state.locked + unrealizedPnl(state) + worldAssetsValue(state.world);
+  return (
+    state.cash +
+    state.locked +
+    unrealizedPnl(state) +
+    spotValue(state) +
+    worldAssetsValue(state.world)
+  );
 }
 
 export function updateHypeIndex(state: SimState): void {

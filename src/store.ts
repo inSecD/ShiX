@@ -1,6 +1,13 @@
 import { create } from 'zustand';
 import { createSim, equity, tick } from './sim/engine';
-import { cancelOrder, closePositionById, placeOrder, setBracket } from './sim/trading';
+import {
+  buySpot,
+  cancelOrder,
+  closePositionById,
+  placeOrder,
+  sellSpot,
+  setBracket
+} from './sim/trading';
 import { buyToken, createToken, launchCost, sellToken } from './sim/launchpad';
 import { RNG, hashString, randomSeed } from './sim/rng';
 import { makeMemeName, makeShitName } from './sim/names';
@@ -45,7 +52,7 @@ export interface Toast {
 }
 
 interface SaveBlob {
-  version: 3;
+  version: 4;
   settings: Settings;
   sim: SimState;
   watchlist: string[];
@@ -101,6 +108,22 @@ function normalizeSim(sim: SimState, startingCash: number): SimState {
   if (!Array.isArray(sim.bots) || sim.bots.length === 0) sim.bots = createBots(startingCash);
   if (sim.challenge === undefined) sim.challenge = null;
   if (!Array.isArray(sim.notices)) sim.notices = [];
+  if (!sim.spotHoldings || typeof sim.spotHoldings !== 'object') sim.spotHoldings = {};
+  for (const [id, holding] of Object.entries(sim.spotHoldings)) {
+    if (
+      !sim.instruments[id] ||
+      !holding ||
+      !Number.isFinite(holding.qty) ||
+      holding.qty <= 0 ||
+      !Number.isFinite(holding.avgCost) ||
+      holding.avgCost <= 0
+    ) {
+      delete sim.spotHoldings[id];
+      continue;
+    }
+    holding.instId = id;
+    if (!Number.isFinite(holding.openedAt)) holding.openedAt = sim.simTime;
+  }
   for (const pos of Object.values(sim.positions)) {
     if (pos.tp === undefined) pos.tp = null;
     if (pos.sl === undefined) pos.sl = null;
@@ -190,6 +213,8 @@ interface Store {
   cancel: (orderId: string) => void;
   closePos: (posId: string, fraction: number) => void;
   closeAll: () => void;
+  spotBuy: (instId: string, usd: number) => void;
+  spotSell: (instId: string, qty: number) => void;
   setRisk: (posId: string, tp: number | null, sl: number | null, trail: number | null) => void;
   startDaily: () => void;
   exitDaily: () => void;
@@ -350,6 +375,20 @@ export const useStore = create<Store>((set, get) => ({
     set((s) => ({ v: s.v + 1 }));
   },
 
+  spotBuy: (instId, usd) => {
+    const { sim, settings, notify } = get();
+    const res = buySpot(sim, settings, instId, usd);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  spotSell: (instId, qty) => {
+    const { sim, settings, notify } = get();
+    const res = sellSpot(sim, settings, instId, qty);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
   worldBuy: (country, commodity, qty) => {
     const { sim, notify } = get();
     const res = buyCommodity(sim, country, commodity, qty);
@@ -486,7 +525,7 @@ export const useStore = create<Store>((set, get) => ({
   save: async () => {
     const { sim, settings, watchlist } = get();
     set({ saving: true });
-    const blob: SaveBlob = { version: 3, settings, sim: trimSim(sim), watchlist };
+    const blob: SaveBlob = { version: 4, settings, sim: trimSim(sim), watchlist };
     const ok = await saveState(blob);
     set({ saving: false });
     if (!ok) get().notify('Gagal menyimpan progres', 'err');
@@ -494,7 +533,7 @@ export const useStore = create<Store>((set, get) => ({
 
   exportSave: () => {
     const { sim, settings, watchlist } = get();
-    const blob: SaveBlob = { version: 3, settings, sim: trimSim(sim), watchlist };
+    const blob: SaveBlob = { version: 4, settings, sim: trimSim(sim), watchlist };
     const text = JSON.stringify(blob);
     const blobUrl = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
     const a = document.createElement('a');

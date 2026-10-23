@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useStore } from '../store';
+import { equity } from '../sim/engine';
 import { fmtPct, fmtPrice, fmtQty, fmtUsd } from '../lib/format';
 import {
   BLACK_MARKET_LEVEL,
@@ -20,7 +21,8 @@ import {
   levelProgress,
   marketChange,
   nextLevelXp,
-  shipQuote
+  shipQuote,
+  traderTier
 } from '../sim/world';
 import type { CountryDef, RouteEstimate } from '../sim/world';
 
@@ -208,6 +210,11 @@ export function WorldView() {
   const maxQty = side === 'buy' ? maxBuy : maxSell;
   const commodityValue = worldAssetsValue(world);
   const commodityPnl = holdingsPnl(world);
+  const tier = traderTier(world.level, equity(sim));
+  const tierNeeds = [
+    tier.levelGap > 0 ? `Level ${tier.next?.minLevel}` : '',
+    tier.equityGap > 0 && tier.next ? fmtUsd(tier.next.minEquity, true) : ''
+  ].filter(Boolean).join(' + ');
   const levelPct = levelProgress(world);
   const routes = useMemo(() => bestRoutes(world, 8), [world, v]);
   const offers = useMemo(() => blackOffers(world, worldCountry), [world, worldCountry, v]);
@@ -234,7 +241,12 @@ export function WorldView() {
         <div className="world-hero-top">
           <div>
             <div className="home-eyebrow">Perdagangan dunia · {home.name}</div>
-            <div className="world-title">Dunia</div>
+            <div className="world-title-row">
+              <div className="world-title">Dunia</div>
+              <span className={`tier-badge tier-${tier.tier.id}`} title={tier.tier.tagline}>
+                {tier.tier.name}
+              </span>
+            </div>
             <div className="tiny muted">
               Level {world.level} · {fmtQty(world.xp)} XP · {world.factories.length} pabrik
             </div>
@@ -260,6 +272,10 @@ export function WorldView() {
         <div className="row between tiny muted" style={{ marginTop: 4 }}>
           <span>{world.level >= 10 ? 'Level maksimum' : `${fmtQty(world.xp)} / ${fmtQty(nextLevelXp(world.level + 1))} XP`}</span>
           <span>HQ: {home.name}</span>
+        </div>
+        <div className="row between tiny muted world-tier-row">
+          <span>{tier.next ? `Tier ${tier.tier.name} → ${tier.next.name}` : 'Tier Global · level maksimum'}</span>
+          <span>{tier.next ? `Butuh ${tierNeeds}` : 'Semua tier terbuka'}</span>
         </div>
       </section>
 
