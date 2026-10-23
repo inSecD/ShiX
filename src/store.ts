@@ -1,9 +1,10 @@
 import { create } from 'zustand';
-import { createSim, tick } from './sim/engine';
-import { cancelOrder, closePositionById, placeOrder } from './sim/trading';
+import { createSim, equity, tick } from './sim/engine';
+import { cancelOrder, closePositionById, placeOrder, setBracket } from './sim/trading';
 import { buyToken, createToken, launchCost, sellToken } from './sim/launchpad';
-import { RNG } from './sim/rng';
+import { RNG, hashString, randomSeed } from './sim/rng';
 import { makeMemeName, makeShitName } from './sim/names';
+import { createBots } from './sim/bots';
 import { clearState, loadState, saveState } from './lib/persist';
 import type {
   AssetClass,
@@ -15,7 +16,7 @@ import type {
   SimState
 } from './sim/types';
 
-export type Tab = 'market' | 'trade' | 'portfolio' | 'news' | 'launchpad' | 'settings';
+export type Tab = 'market' | 'trade' | 'portfolio' | 'news' | 'launchpad' | 'rank' | 'settings';
 export type Timeframe = '1h' | '4h' | '1D' | '1W';
 
 export interface Toast {
@@ -25,10 +26,78 @@ export interface Toast {
 }
 
 interface SaveBlob {
-  version: 1;
+  version: 2;
   settings: Settings;
   sim: SimState;
   watchlist: string[];
+}
+
+const DAILY_META_KEY = 'shix.daily.meta.v1';
+const DAILY_TARGET = 0.1;
+const DAILY_TICKS = 7 * 24;
+
+export interface DailyMeta {
+  streak: number;
+  lastDay: string;
+  best: number;
+}
+
+export function dayKeyOf(d = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function yesterdayKey(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return dayKeyOf(d);
+}
+
+export function readDailyMeta(): DailyMeta {
+  try {
+    const raw = localStorage.getItem(DAILY_META_KEY);
+    if (!raw) return { streak: 0, lastDay: '', best: 0 };
+    const parsed = JSON.parse(raw) as Partial<DailyMeta>;
+    return {
+      streak: Number(parsed.streak) || 0,
+      lastDay: typeof parsed.lastDay === 'string' ? parsed.lastDay : '',
+      best: Number(parsed.best) || 0
+    };
+  } catch {
+    return { streak: 0, lastDay: '', best: 0 };
+  }
+}
+
+function writeDailyMeta(meta: DailyMeta): void {
+  try {
+    localStorage.setItem(DAILY_META_KEY, JSON.stringify(meta));
+  } catch {
+    /* ignore */
+  }
+}
+
+function normalizeSim(sim: SimState, startingCash: number): SimState {
+  if (!Array.isArray(sim.bots) || sim.bots.length === 0) sim.bots = createBots(startingCash);
+  if (sim.challenge === undefined) sim.challenge = null;
+  if (!Array.isArray(sim.notices)) sim.notices = [];
+  for (const pos of Object.values(sim.positions)) {
+    if (pos.tp === undefined) pos.tp = null;
+    if (pos.sl === undefined) pos.sl = null;
+    if (pos.trail === undefined) pos.trail = null;
+    if (typeof pos.trailPeak !== 'number') pos.trailPeak = 0;
+  }
+  for (const bot of sim.bots) {
+    if (!Array.isArray(bot.holdings)) bot.holdings = [];
+    if (!Number.isFinite(bot.startEquity) || bot.startEquity <= 0) bot.startEquity = startingCash;
+    if (!Number.isFinite(bot.cash)) bot.cash = 0;
+    if (!Number.isFinite(bot.equity)) bot.equity = bot.startEquity;
+    if (!Number.isFinite(bot.pnlPct)) bot.pnlPct = 0;
+    if (!Number.isFinite(bot.trades)) bot.trades = 0;
+    if (!Number.isFinite(bot.lastTrade)) bot.lastTrade = 0;
+  }
+  return sim;
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -52,6 +121,7 @@ function trimSim(sim: SimState): SimState {
   if (out.events.length > 120) out.events = out.events.slice(0, 120);
   if (out.fills.length > 120) out.fills = out.fills.slice(0, 120);
   if (out.equityCurve.length > 600) out.equityCurve = out.equityCurve.slice(-600);
+  if (out.notices.length > 20) out.notices = out.notices.slice(-20);
   return out;
 }
 
@@ -97,6 +167,9 @@ interface Store {
   cancel: (orderId: string) => void;
   closePos: (posId: string, fraction: number) => void;
   closeAll: () => void;
+  setRisk: (posId: string, tp: number | null, sl: number | null, trail: number | null) => void;
+  startDaily: () => void;
+  exitDaily: () => void;
 
   launch: (name: string, ticker: string, kind: 'meme' | 'shitcoin', tags: string[]) => void;
   buyTok: (tokenId: string, usd: number) => void;
@@ -126,13 +199,14 @@ export const useStore = create<Store>((set, get) => ({
 
   boot: async () => {
     const hash = (window.location.hash || '').replace('#/', '') as Tab;
-    const valid: Tab[] = ['market', 'trade', 'portfolio', 'news', 'launchpad', 'settings'];
+    const valid: Tab[] = ['market', 'trade', 'portfolio', 'news', 'launchpad', 'rank', 'settings'];
     const initialTab = valid.includes(hash) ? hash : 'market';
     const blob = await loadState<SaveBlob>();
-    if (blob && blob.version === 1 && blob.sim && blob.sim.instruments) {
+    if (blob && blob.sim && blob.sim.instruments) {
+      const settings = { ...DEFAULT_SETTINGS, ...blob.settings };
       set({
-        sim: blob.sim,
-        settings: { ...DEFAULT_SETTINGS, ...blob.settings },
+        sim: normalizeSim(blob.sim, settings.startingCash),
+        settings,
         watchlist: blob.watchlist?.length ? blob.watchlist : get().watchlist,
         tab: initialTab,
         booted: true
@@ -172,6 +246,36 @@ export const useStore = create<Store>((set, get) => ({
   doTick: (n) => {
     const { sim, settings } = get();
     for (let i = 0; i < n; i++) tick(sim, settings);
+
+    const ch = sim.challenge;
+    if (ch && ch.done && !ch.rewarded) {
+      ch.rewarded = true;
+      const meta = readDailyMeta();
+      const pct = ch.finalPct ?? 0;
+      if (ch.won) {
+        meta.streak =
+          meta.lastDay === ch.dayKey ? Math.max(1, meta.streak) : meta.lastDay === yesterdayKey() ? meta.streak + 1 : 1;
+        meta.lastDay = ch.dayKey;
+      } else {
+        meta.streak = 0;
+        meta.lastDay = ch.dayKey;
+      }
+      meta.best = Math.max(meta.best, pct);
+      writeDailyMeta(meta);
+    }
+
+    if (sim.notices.length) {
+      const notes = sim.notices.splice(0, sim.notices.length);
+      const last = notes[notes.length - 1];
+      toastId += 1;
+      set({
+        toast: {
+          id: toastId,
+          msg: notes.length > 1 ? `${last} (+${notes.length - 1})` : last,
+          kind: /gagal/i.test(last) ? 'err' : 'ok'
+        }
+      });
+    }
     set((s) => ({ v: s.v + 1 }));
   },
 
@@ -200,6 +304,56 @@ export const useStore = create<Store>((set, get) => ({
     for (const id of ids) closePositionById(sim, id, settings, 1);
     notify(`${ids.length} posisi ditutup`, 'ok');
     set((s) => ({ v: s.v + 1 }));
+  },
+
+  setRisk: (posId, tp, sl, trail) => {
+    const { sim, notify } = get();
+    const res = setBracket(sim, posId, tp, sl, trail);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  startDaily: () => {
+    const s = get().settings;
+    const prev = get().sim.challenge;
+    const dayKey = dayKeyOf();
+    const seed = hashString(`shix-daily:${dayKey}`);
+    const next: Settings = { ...s, seed, startingCash: 100000 };
+    const sim = createSim(next);
+    const meta = readDailyMeta();
+    sim.challenge = {
+      dayKey,
+      seed,
+      startEquity: equity(sim),
+      targetPct: DAILY_TARGET,
+      startTick: sim.ticks,
+      deadlineTick: sim.ticks + DAILY_TICKS,
+      done: false,
+      won: false,
+      bestPct: 0,
+      finalPct: null,
+      attempts: prev && prev.dayKey === dayKey ? prev.attempts + 1 : 1,
+      streak: meta.streak,
+      rewarded: false
+    };
+    set({
+      sim,
+      settings: next,
+      watchlist: ['BN', 'EF', 'DGE'],
+      selectedId: 'BN',
+      tab: 'market'
+    });
+    set((st) => ({ v: st.v + 1 }));
+    get().notify(`Tantangan ${dayKey} dimulai: target +${(DAILY_TARGET * 100).toFixed(0)}% dalam 7 hari`, 'ok');
+  },
+
+  exitDaily: () => {
+    const s = get().settings;
+    const next: Settings = { ...s, seed: randomSeed() };
+    const sim = createSim(next);
+    set({ sim, settings: next, selectedId: 'BN', watchlist: ['BN', 'EF', 'DGE'], tab: 'market' });
+    set((st) => ({ v: st.v + 1 }));
+    get().notify('Mode harian selesai. Dunia normal baru dibuat.', 'ok');
   },
 
   launch: (name, ticker, kind, tags) => {
@@ -252,7 +406,7 @@ export const useStore = create<Store>((set, get) => ({
   save: async () => {
     const { sim, settings, watchlist } = get();
     set({ saving: true });
-    const blob: SaveBlob = { version: 1, settings, sim: trimSim(sim), watchlist };
+    const blob: SaveBlob = { version: 2, settings, sim: trimSim(sim), watchlist };
     const ok = await saveState(blob);
     set({ saving: false });
     if (!ok) get().notify('Gagal menyimpan progres', 'err');
@@ -260,7 +414,7 @@ export const useStore = create<Store>((set, get) => ({
 
   exportSave: () => {
     const { sim, settings, watchlist } = get();
-    const blob: SaveBlob = { version: 1, settings, sim: trimSim(sim), watchlist };
+    const blob: SaveBlob = { version: 2, settings, sim: trimSim(sim), watchlist };
     const text = JSON.stringify(blob);
     const blobUrl = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
     const a = document.createElement('a');
@@ -274,9 +428,10 @@ export const useStore = create<Store>((set, get) => ({
     try {
       const blob = JSON.parse(text) as SaveBlob;
       if (!blob.sim?.instruments) throw new Error('format salah');
+      const settings = { ...DEFAULT_SETTINGS, ...blob.settings };
       set({
-        sim: blob.sim,
-        settings: { ...DEFAULT_SETTINGS, ...blob.settings },
+        sim: normalizeSim(blob.sim, settings.startingCash),
+        settings,
         watchlist: blob.watchlist ?? []
       });
       set((s) => ({ v: s.v + 1 }));

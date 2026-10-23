@@ -80,7 +80,9 @@ export function openPosition(
     fees: fee,
     fundingPaid: 0,
     tp: null,
-    sl: null
+    sl: null,
+    trail: null,
+    trailPeak: 0
   };
   state.positions[pos.id] = pos;
   state.cash -= margin + fee;
@@ -106,7 +108,8 @@ export function closePosition(
   qty: number,
   price: number,
   fee: number,
-  kind: Fill['kind'] = 'close'
+  kind: Fill['kind'] = 'close',
+  note = ''
 ): { pnl: number } {
   const pos = state.positions[posId];
   if (!pos) return { pnl: 0 };
@@ -137,9 +140,51 @@ export function closePosition(
     fee,
     pnl: pnl - fee,
     kind,
-    note: kind === 'liquidate' ? 'LIKUIDASI PAKSA' : `Tutup ${pos.side}`
+    note: note || (kind === 'liquidate' ? 'LIKUIDASI PAKSA' : `Tutup ${pos.side}`)
   });
   return { pnl };
+}
+
+export function setBracket(
+  state: SimState,
+  posId: string,
+  tp: number | null,
+  sl: number | null,
+  trail: number | null
+): { ok: boolean; msg: string } {
+  const pos = state.positions[posId];
+  if (!pos) return { ok: false, msg: 'Posisi tidak ditemukan' };
+  const inst = state.instruments[pos.instId];
+  if (!inst) return { ok: false, msg: 'Instrumen tidak ditemukan' };
+
+  if (tp != null && (!Number.isFinite(tp) || tp <= 0)) return { ok: false, msg: 'Harga TP tidak valid' };
+  if (sl != null && (!Number.isFinite(sl) || sl <= 0)) return { ok: false, msg: 'Harga SL tidak valid' };
+  if (trail != null && (!Number.isFinite(trail) || trail < 0 || trail > 0.5)) {
+    return { ok: false, msg: 'Trailing harus antara 0% dan 50%' };
+  }
+
+  const px = inst.price;
+  const long = pos.side === 'long';
+  if (tp != null) {
+    const good = long ? tp > px : tp < px;
+    if (!good) return { ok: false, msg: long ? 'TP long harus di atas harga sekarang' : 'TP short harus di bawah harga sekarang' };
+  }
+  if (sl != null) {
+    const good = long ? sl < px : sl > px;
+    if (!good) return { ok: false, msg: long ? 'SL long harus di bawah harga sekarang' : 'SL short harus di atas harga sekarang' };
+  }
+
+  pos.tp = tp;
+  pos.sl = sl;
+  if (trail != null && trail > 0) {
+    pos.trail = trail;
+    pos.trailPeak = px;
+  } else {
+    pos.trail = null;
+    pos.trailPeak = 0;
+  }
+  const cleared = tp == null && sl == null && !(trail != null && trail > 0);
+  return { ok: true, msg: cleared ? 'Bracket dihapus' : 'TP/SL aktif (OCO)' };
 }
 
 export interface OrderRequest {

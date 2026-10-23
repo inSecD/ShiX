@@ -71,6 +71,8 @@ export interface Position {
   fundingPaid: number;
   tp: number | null;
   sl: number | null;
+  trail: number | null;
+  trailPeak: number;
 }
 
 export type OrderType = 'market' | 'limit' | 'stop' | 'stop-limit';
@@ -154,8 +156,46 @@ export interface Fill {
   price: number;
   fee: number;
   pnl: number;
-  kind: 'open' | 'close' | 'liquidate' | 'launch' | 'rug' | 'fee';
+  kind: 'open' | 'close' | 'liquidate' | 'launch' | 'rug' | 'fee' | 'tp' | 'sl' | 'trail';
   note: string;
+}
+
+export type BotStrategy = 'momentum' | 'contrarian' | 'degen' | 'quant' | 'whale' | 'panic';
+
+export interface BotHolding {
+  instId: string;
+  qty: number;
+  entry: number;
+}
+
+export interface Bot {
+  id: string;
+  name: string;
+  emoji: string;
+  strategy: BotStrategy;
+  startEquity: number;
+  cash: number;
+  holdings: BotHolding[];
+  equity: number;
+  pnlPct: number;
+  lastTrade: number;
+  trades: number;
+}
+
+export interface Challenge {
+  dayKey: string;
+  seed: number;
+  startEquity: number;
+  targetPct: number;
+  startTick: number;
+  deadlineTick: number;
+  done: boolean;
+  won: boolean;
+  bestPct: number;
+  finalPct: number | null;
+  attempts: number;
+  streak: number;
+  rewarded: boolean;
 }
 
 export interface Settings {
@@ -192,4 +232,7 @@ export interface SimState {
   hypeIndex: number;
   nextTokenAt: number;
   nextEventAt: number;
+  bots: Bot[];
+  challenge: Challenge | null;
+  notices: string[];
 }

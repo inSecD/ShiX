@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store';
 import { ChartView } from './ChartView';
 import { marketOpen } from '../sim/engine';
@@ -13,6 +13,8 @@ const TYPES: { id: OrderType; label: string }[] = [
   { id: 'stop-limit', label: 'Stop-Limit' }
 ];
 
+const pxText = (v: number) => String(+v.toPrecision(6));
+
 export function TradePanel() {
   const sim = useStore((s) => s.sim);
   const v = useStore((s) => s.v);
@@ -22,6 +24,7 @@ export function TradePanel() {
   const order = useStore((s) => s.order);
   const cancel = useStore((s) => s.cancel);
   const closePos = useStore((s) => s.closePos);
+  const setRisk = useStore((s) => s.setRisk);
   void v;
 
   const inst = sim.instruments[selectedId];
@@ -31,11 +34,31 @@ export function TradePanel() {
   const [limitPx, setLimitPx] = useState('');
   const [stopPx, setStopPx] = useState('');
   const [lev, setLev] = useState(1);
+  const [tpText, setTpText] = useState('');
+  const [slText, setSlText] = useState('');
+  const [trailText, setTrailText] = useState('');
 
   const pos = useMemo(
     () => Object.values(sim.positions).find((p) => p.instId === selectedId),
     [sim.positions, selectedId]
   );
+
+  useEffect(() => {
+    setTpText(pos?.tp != null ? pxText(pos.tp) : '');
+    setSlText(pos?.sl != null ? pxText(pos.sl) : '');
+    setTrailText(pos?.trail != null ? String(+(pos.trail * 100).toFixed(2)) : '');
+  }, [pos?.id, pos?.tp, pos?.sl, pos?.trail]);
+
+  const numOrNull = (text: string): number | null => {
+    const n = parseFloat(text);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+
+  const saveRisk = (posId: string) => {
+    const t = parseFloat(trailText);
+    const trail = Number.isFinite(t) && t > 0 ? Math.min(t, 50) / 100 : null;
+    setRisk(posId, numOrNull(tpText), numOrNull(slText), trail);
+  };
   const orders = useMemo(
     () => Object.values(sim.orders).filter((o) => o.instId === selectedId && (o.status === 'open' || o.status === 'triggered')),
     [sim.orders, selectedId]
@@ -259,6 +282,81 @@ export function TradePanel() {
               <span className="k">Likuidasi</span>
               <span className="v down">{fmtPrice(pos.liqPrice)}</span>
             </div>
+
+            <div className="divider" />
+            <div className="row between" style={{ marginBottom: 6 }}>
+              <span className="bracket-title">TP / SL / Trailing</span>
+              <span className="badge">OCO</span>
+            </div>
+            <div className="bracket-grid">
+              <div>
+                <label>Take profit</label>
+                <input
+                  inputMode="decimal"
+                  value={tpText}
+                  placeholder={fmtPrice(inst.price * (pos.side === 'long' ? 1.05 : 0.95))}
+                  onChange={(e) => setTpText(e.target.value)}
+                />
+              </div>
+              <div>
+                <label>Stop loss</label>
+                <input
+                  inputMode="decimal"
+                  value={slText}
+                  placeholder={fmtPrice(inst.price * (pos.side === 'long' ? 0.97 : 1.03))}
+                  onChange={(e) => setSlText(e.target.value)}
+                />
+              </div>
+              <div>
+                <label>Trail %</label>
+                <input
+                  inputMode="decimal"
+                  value={trailText}
+                  placeholder="2"
+                  onChange={(e) => setTrailText(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="quick-row">
+              <button
+                className="tiny"
+                onClick={() => setTpText(pxText(inst.price * (pos.side === 'long' ? 1.05 : 0.95)))}
+              >
+                TP 5%
+              </button>
+              <button
+                className="tiny"
+                onClick={() => setSlText(pxText(inst.price * (pos.side === 'long' ? 0.97 : 1.03)))}
+              >
+                SL 3%
+              </button>
+              <button className="tiny" onClick={() => setTrailText('2')}>
+                Trail 2%
+              </button>
+              <button
+                className="tiny"
+                onClick={() => {
+                  setTpText('');
+                  setSlText('');
+                  setTrailText('');
+                }}
+              >
+                Reset
+              </button>
+            </div>
+            <div className="row" style={{ gap: 6, marginTop: 6 }}>
+              <button style={{ flex: 1 }} onClick={() => saveRisk(pos.id)}>
+                Simpan Bracket
+              </button>
+              <button className="ghost" onClick={() => setRisk(pos.id, null, null, null)}>
+                Hapus
+              </button>
+            </div>
+            <div className="hint" style={{ marginTop: 6 }}>
+              TP + SL aktif bersamaan (kena salah satu, posisi ditutup). Trailing mengikuti harga terbaik
+              sejak dipasang.
+            </div>
+
             <div className="row" style={{ marginTop: 10, gap: 6 }}>
               <button style={{ flex: 1 }} onClick={() => closePos(pos.id, 0.5)}>
                 Tutup 50%

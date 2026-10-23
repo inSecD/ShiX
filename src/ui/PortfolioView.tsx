@@ -93,6 +93,7 @@ export function PortfolioView() {
                   <th>Mark</th>
                   <th>PnL</th>
                   <th>Liq</th>
+                  <th>Bracket</th>
                   <th />
                 </tr>
               </thead>
@@ -121,6 +122,12 @@ export function PortfolioView() {
                         <div className="tiny">{fmtPct(roe)}</div>
                       </td>
                       <td className="down">{fmtPrice(p.liqPrice)}</td>
+                      <td>
+                        {p.tp != null && <div className="tiny up">TP {fmtPrice(p.tp)}</div>}
+                        {p.sl != null && <div className="tiny down">SL {fmtPrice(p.sl)}</div>}
+                        {p.trail != null && <div className="tiny muted">Trail {(p.trail * 100).toFixed(1)}%</div>}
+                        {p.tp == null && p.sl == null && p.trail == null && <span className="muted tiny">-</span>}
+                      </td>
                       <td>
                         <button
                           className="tiny"

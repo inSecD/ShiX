@@ -1,6 +1,6 @@
 import { createSim, tick, equity, unrealizedPnl } from '../src/sim/engine';
-import { placeOrder, closePositionById } from '../src/sim/trading';
-import type { Settings } from '../src/sim/types';
+import { placeOrder, closePositionById, setBracket } from '../src/sim/trading';
+import type { Settings, SimState } from '../src/sim/types';
 
 const settings: Settings = {
   seed: 12345,
@@ -23,7 +23,8 @@ for (const id of samples) before[id] = state.instruments[id]?.price ?? 0;
 
 let nan = 0;
 let huge = 0;
-for (let i = 0; i < 4000; i++) {
+const runTicks = Number(process.env.TICKS ?? 4000);
+for (let i = 0; i < runTicks; i++) {
   tick(state, settings);
   for (const id of state.order) {
     const p = state.instruments[id].price;
@@ -78,3 +79,119 @@ console.log('open orders:', Object.values(state.orders).filter(o => o.status ===
 console.log('fills:', state.fills.length);
 console.log('equity curve points:', state.equityCurve.length);
 console.log('sample events:', state.events.slice(0, 3).map(e => e.title));
+
+// ---------- bots ----------
+console.log('---');
+let botBad = 0;
+for (const b of state.bots) {
+  if (!Number.isFinite(b.equity) || b.equity <= 0) botBad++;
+  if (!Number.isFinite(b.cash) || b.cash < -0.01) botBad++;
+  for (const h of b.holdings) {
+    const p = state.instruments[h.instId]?.price ?? 0;
+    if (!Number.isFinite(h.qty) || h.qty <= 0 || !Number.isFinite(p) || p <= 0) botBad++;
+  }
+}
+const board = [...state.bots.map(b => ({ name: b.name, eq: b.equity, pnl: b.pnlPct })), { name: 'Kamu', eq: equity(state), pnl: (equity(state) / settings.startingCash - 1) * 100 }]
+  .sort((a, b) => b.eq - a.eq);
+console.log('bots:', state.bots.length, '| bad:', botBad);
+console.log('leaderboard:', board.slice(0, 4).map(r => `${r.name} ${r.eq.toFixed(0)} (${r.pnl.toFixed(1)}%)`).join(' | '));
+const big = [...state.bots].sort((a, b) => b.equity - a.equity)[0];
+console.log('top bot holdings:', big.holdings.map(h => {
+  const i = state.instruments[h.instId];
+  return `${h.instId} qty=${h.qty.toExponential(3)} entry=${h.entry.toExponential(3)} px=${i.price.toExponential(3)} anchor0=${i.anchor0.toExponential(3)} val=${(h.qty * i.price).toExponential(3)}`;
+}).join(' | '));
+
+// ---------- bracket orders ----------
+function freshSim(): SimState {
+  return createSim(settings);
+}
+function openLong(sim: SimState) {
+  const inst = sim.instruments['BN'];
+  const res = placeOrder(sim, settings, { instId: 'BN', side: 'buy', type: 'market', qty: 2000 / inst.price, lev: 1 });
+  if (!res.ok) throw new Error('open failed: ' + res.msg);
+  return Object.values(sim.positions)[0];
+}
+
+{
+  const sim = freshSim();
+  const pos = openLong(sim);
+  const inst = sim.instruments[pos.instId];
+  const bad = setBracket(sim, pos.id, inst.price * 0.9, null, null);
+  console.log('bracket reject below mark:', !bad.ok);
+  const good = setBracket(sim, pos.id, inst.price * 1.05, inst.price * 0.97, 0.02);
+  console.log('bracket set:', good.ok, '| tp', pos.tp != null, '| sl', pos.sl != null, '| trail', pos.trail);
+  pos.tp = inst.price * 0.5;
+  tick(sim, settings);
+  console.log('TP trigger:', Object.keys(sim.positions).length === 0, '| kind:', sim.fills[0]?.kind, '| notice:', sim.notices[0]);
+}
+
+{
+  const sim = freshSim();
+  const pos = openLong(sim);
+  const inst = sim.instruments[pos.instId];
+  pos.sl = inst.price * 1.5;
+  tick(sim, settings);
+  console.log('SL trigger:', Object.keys(sim.positions).length === 0, '| kind:', sim.fills[0]?.kind, '| notice:', sim.notices[0]);
+}
+
+{
+  const sim = freshSim();
+  const pos = openLong(sim);
+  const inst = sim.instruments[pos.instId];
+  pos.trail = 0.02;
+  pos.trailPeak = inst.price * 100;
+  tick(sim, settings);
+  console.log('Trail trigger:', Object.keys(sim.positions).length === 0, '| kind:', sim.fills[0]?.kind, '| notice:', sim.notices[0]);
+}
+
+// ---------- daily challenge ----------
+{
+  const sim = freshSim();
+  sim.challenge = {
+    dayKey: 'test-early',
+    seed: settings.seed,
+    startEquity: equity(sim) * 0.5,
+    targetPct: 0.1,
+    startTick: sim.ticks,
+    deadlineTick: sim.ticks + 1000,
+    done: false,
+    won: false,
+    bestPct: 0,
+    finalPct: null,
+    attempts: 1,
+    streak: 0,
+    rewarded: false
+  };
+  tick(sim, settings);
+  console.log('challenge early win:', sim.challenge.done, '| won:', sim.challenge.won);
+}
+
+{
+  const sim = freshSim();
+  sim.challenge = {
+    dayKey: 'test-day',
+    seed: settings.seed,
+    startEquity: equity(sim),
+    targetPct: 0.1,
+    startTick: sim.ticks,
+    deadlineTick: sim.ticks + 1,
+    done: false,
+    won: false,
+    bestPct: 0,
+    finalPct: null,
+    attempts: 1,
+    streak: 0,
+    rewarded: false
+  };
+  tick(sim, settings);
+  console.log(
+    'challenge eval:',
+    sim.challenge.done,
+    '| won:',
+    sim.challenge.won,
+    '| final:',
+    sim.challenge.finalPct?.toFixed(2),
+    '| notice:',
+    sim.notices.find(n => n.includes('TANTANGAN')) ?? sim.notices[0]
+  );
+}

@@ -9,7 +9,8 @@ import {
   fillMarketOrder
 } from './trading';
 import { spawnAiToken, tickTokens } from './launchpad';
-import type { AssetClass, Candle, Instrument, Settings, SimState } from './types';
+import { createBots, tickBots } from './bots';
+import type { AssetClass, Candle, Fill, Instrument, Position, Settings, SimState } from './types';
 
 export const HOUR = 3_600_000;
 export const DAY = 24 * HOUR;
@@ -171,7 +172,10 @@ export function createSim(settings: Settings): SimState {
     equityCurve: [],
     hypeIndex: 0,
     nextTokenAt: Date.UTC(2026, 0, 5, 13, 30) + 6 * HOUR,
-    nextEventAt: Date.UTC(2026, 0, 5, 13, 30) + 2 * HOUR
+    nextEventAt: Date.UTC(2026, 0, 5, 13, 30) + 2 * HOUR,
+    bots: createBots(settings.startingCash),
+    challenge: null,
+    notices: []
   };
 
   for (let i = 0; i < 72; i++) tick(state, settings, true);
@@ -207,7 +211,9 @@ export function tick(state: SimState, settings: Settings, warmup = false): void 
   if (!warmup) {
     processOrders(state, settings, rng);
     applyFunding(state);
+    checkBrackets(state, settings);
     checkLiquidations(state, settings);
+    tickBots(state, rng);
     tickTokens(state, rng);
     if (state.simTime >= state.nextTokenAt) {
       const tok = spawnAiToken(state, rng);
@@ -228,6 +234,7 @@ export function tick(state: SimState, settings: Settings, warmup = false): void 
     updateHypeIndex(state);
     state.equityCurve.push(equity(state));
     if (state.equityCurve.length > 2000) state.equityCurve.splice(0, 200);
+    checkChallenge(state);
   }
 
   state.rngState = rng.state;
@@ -490,6 +497,101 @@ function checkLiquidations(state: SimState, settings: Settings): void {
     closePosition(state, pos.id, pos.qty, inst.price, penalty, 'liquidate');
   }
   void settings;
+}
+
+export function pushNotice(state: SimState, msg: string): void {
+  state.notices.push(msg);
+  if (state.notices.length > 20) state.notices.splice(0, state.notices.length - 20);
+}
+
+function closeBracket(
+  state: SimState,
+  settings: Settings,
+  pos: Position,
+  kind: 'tp' | 'sl' | 'trail',
+  label: string
+): void {
+  const inst = state.instruments[pos.instId];
+  if (!inst) return;
+  const side = pos.side === 'long' ? 'sell' : 'buy';
+  const est = estimateFillPrice(inst, side, pos.qty, settings);
+  const dir = pos.side === 'long' ? 1 : -1;
+  const movePct = pos.entry > 0 ? ((est.price - pos.entry) / pos.entry) * 100 * dir : 0;
+  const res = closePosition(state, pos.id, pos.qty, est.price, est.fee, kind as Fill['kind'], label);
+  pushNotice(
+    state,
+    `${label} ${inst.id}: ${res.pnl >= 0 ? '+' : ''}$${res.pnl.toFixed(0)} (${movePct >= 0 ? '+' : ''}${movePct.toFixed(1)}%)`
+  );
+}
+
+function checkBrackets(state: SimState, settings: Settings): void {
+  for (const pos of Object.values(state.positions)) {
+    const inst = state.instruments[pos.instId];
+    if (!inst || !marketOpen(inst, state.simTime)) continue;
+    const px = inst.price;
+    const long = pos.side === 'long';
+
+    if (pos.sl != null) {
+      const hit = long ? px <= pos.sl : px >= pos.sl;
+      if (hit) {
+        closeBracket(state, settings, pos, 'sl', 'Stop loss');
+        continue;
+      }
+    }
+
+    if (pos.trail != null && pos.trail > 0) {
+      if (long) {
+        if (px > pos.trailPeak) pos.trailPeak = px;
+        if (px <= pos.trailPeak * (1 - pos.trail)) {
+          closeBracket(state, settings, pos, 'trail', 'Trailing stop');
+          continue;
+        }
+      } else {
+        if (pos.trailPeak <= 0 || px < pos.trailPeak) pos.trailPeak = px;
+        if (px >= pos.trailPeak * (1 + pos.trail)) {
+          closeBracket(state, settings, pos, 'trail', 'Trailing stop');
+          continue;
+        }
+      }
+    }
+
+    if (pos.tp != null) {
+      const hit = long ? px >= pos.tp : px <= pos.tp;
+      if (hit) closeBracket(state, settings, pos, 'tp', 'Take profit');
+    }
+  }
+}
+
+export function checkChallenge(state: SimState): void {
+  const ch = state.challenge;
+  if (!ch || ch.done) return;
+  const eq = equity(state);
+  const pct = ch.startEquity > 0 ? (eq / ch.startEquity - 1) * 100 : 0;
+  if (pct > ch.bestPct) ch.bestPct = pct;
+  const won = eq >= ch.startEquity * (1 + ch.targetPct);
+  if (!won && state.ticks < ch.deadlineTick) return;
+
+  ch.done = true;
+  ch.finalPct = pct;
+  ch.won = won;
+  pushNotice(
+    state,
+    ch.won
+      ? `TANTANGAN HARIAN LOLOS: ${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`
+      : `Tantangan harian gagal: ${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`
+  );
+  state.events.unshift({
+    id: `ch${state.ticks}`,
+    t: state.simTime,
+    title: ch.won ? 'Tantangan harian lolos' : 'Tantangan harian berakhir',
+    body: `Target +${(ch.targetPct * 100).toFixed(0)}%, hasil ${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%.`,
+    severity: ch.won ? 'med' : 'low',
+    tags: ['Harian', 'Tantangan'],
+    impact: 0,
+    instId: null,
+    sector: null,
+    cls: null
+  });
 }
 
 export function unrealizedPnl(state: SimState): number {

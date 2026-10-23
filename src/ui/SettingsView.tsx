@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react';
-import { useStore } from '../store';
+import { useStore, dayKeyOf, readDailyMeta } from '../store';
+import { equity } from '../sim/engine';
 import { formatSeed, parseSeed, randomSeed } from '../sim/rng';
-import { fmtUsd } from '../lib/format';
+import { fmtPct, fmtUsd } from '../lib/format';
 
 export function SettingsView() {
   const settings = useStore((s) => s.settings);
@@ -11,6 +12,8 @@ export function SettingsView() {
   const saving = useStore((s) => s.saving);
   const exportSave = useStore((s) => s.exportSave);
   const importSave = useStore((s) => s.importSave);
+  const startDaily = useStore((s) => s.startDaily);
+  const exitDaily = useStore((s) => s.exitDaily);
   const sim = useStore((s) => s.sim);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [seedText, setSeedText] = useState(formatSeed(settings.seed));
@@ -21,6 +24,19 @@ export function SettingsView() {
     if (parsed === null) return;
     setSettings({ seed: parsed });
     setSeedText(formatSeed(parsed));
+  };
+
+  const ch = sim.challenge;
+  const meta = readDailyMeta();
+  const chPct = ch && ch.startEquity > 0 ? (equity(sim) / ch.startEquity - 1) * 100 : 0;
+  const chProg = ch ? Math.min(1, Math.max(0, chPct / (ch.targetPct * 100))) : 0;
+  const chLeft = ch ? Math.max(0, ch.deadlineTick - sim.ticks) : 0;
+
+  const beginDaily = () => {
+    const msg = ch
+      ? 'Ulangi tantangan hari ini? Dunia sekarang (dan save otomatisnya) akan diganti.'
+      : 'Mulai tantangan harian? Dunia sekarang (dan save otomatisnya) akan diganti.';
+    if (confirm(msg)) startDaily();
   };
 
   return (
@@ -117,6 +133,90 @@ export function SettingsView() {
             <span className="k">Tick simulasi</span>
             <span className="v">{sim.ticks}</span>
           </div>
+        </div>
+      </div>
+
+      <div className="panel">
+        <div className="panel-head">
+          <span>Tantangan Harian</span>
+          <span className={`badge ${ch ? (ch.done ? (ch.won ? 'accent' : 'danger') : 'warn') : ''}`}>
+            {ch ? (ch.done ? (ch.won ? 'LOLOS' : 'GAGAL') : 'AKTIF') : 'OFF'}
+          </span>
+        </div>
+        <div className="panel-body">
+          <div className="row between tiny">
+            <span className="muted">Tanggal / seed harian</span>
+            <span className="mono">{dayKeyOf()}</span>
+          </div>
+          <div className="row between tiny" style={{ marginTop: 4 }}>
+            <span className="muted">Streak</span>
+            <span className="mono">
+              {meta.streak} hari · best {fmtPct(meta.best)}
+            </span>
+          </div>
+
+          <div className="divider" />
+
+          {ch ? (
+            <>
+              <div className="row between">
+                <span className="tiny muted">
+                  Target +{(ch.targetPct * 100).toFixed(0)}% dalam 7 hari
+                </span>
+                <span className={`mono ${chPct >= 0 ? 'up' : 'down'}`} style={{ fontSize: 12, fontWeight: 700 }}>
+                  {fmtPct(chPct)}
+                </span>
+              </div>
+              <div className="curve" style={{ marginTop: 6 }}>
+                <i style={{ width: `${chProg * 100}%` }} />
+              </div>
+              <div className="row between tiny muted" style={{ marginTop: 4 }}>
+                <span>terbaik {fmtPct(ch.bestPct)}</span>
+                <span>
+                  {ch.done
+                    ? `hasil ${fmtPct(ch.finalPct ?? chPct)}`
+                    : `sisa ${Math.max(0, Math.ceil(chLeft / 24))} hari`}
+                </span>
+              </div>
+              <div className="kv" style={{ marginTop: 6 }}>
+                <span className="k">Attempt</span>
+                <span className="v">#{ch.attempts}</span>
+              </div>
+              <div className="kv">
+                <span className="k">Seed</span>
+                <span className="v">{formatSeed(ch.seed)}</span>
+              </div>
+              {ch.done && (
+                <div className={`hint ${ch.won ? 'up' : 'down'}`} style={{ marginTop: 6 }}>
+                  {ch.won
+                    ? 'Target tercapai. Streak bertambah — balik lagi besok buat tantangan baru.'
+                    : 'Target belum tercapai. Hari ini masih bisa diulang dengan pasar yang sama.'}
+                </div>
+              )}
+              <button className="primary" style={{ width: '100%', marginTop: 8 }} onClick={beginDaily}>
+                Ulangi hari ini (attempt #{ch.attempts + 1})
+              </button>
+              <button
+                className="ghost"
+                style={{ width: '100%', marginTop: 6 }}
+                onClick={() => {
+                  if (confirm('Keluar dari mode harian dan buat dunia normal baru?')) exitDaily();
+                }}
+              >
+                Keluar mode harian
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="hint" style={{ marginBottom: 8 }}>
+                Satu pasar deterministik per tanggal (seed = tanggal), modal $100.000, target +10% dalam 7
+                hari simulasi. Bot AI ikut di papan peringkat. Menang = streak naik; kalah = streak reset.
+              </div>
+              <button className="primary" style={{ width: '100%' }} onClick={beginDaily}>
+                Mulai tantangan hari ini
+              </button>
+            </>
+          )}
         </div>
       </div>
 

@@ -7,7 +7,9 @@ import { TradePanel } from './ui/TradePanel';
 import { PortfolioView } from './ui/PortfolioView';
 import { NewsView } from './ui/NewsView';
 import { LaunchpadView } from './ui/LaunchpadView';
+import { RankView } from './ui/RankView';
 import { SettingsView } from './ui/SettingsView';
+import { DailyBar } from './ui/DailyBar';
 
 const TICK_MS = 200;
 
@@ -78,12 +80,14 @@ export default function App() {
   return (
     <div className="app">
       <TopBar />
+      <DailyBar />
       <main>
         {tab === 'market' && <MarketView />}
         {tab === 'trade' && <TradePanel />}
         {tab === 'portfolio' && <PortfolioView />}
         {tab === 'news' && <NewsView />}
         {tab === 'launchpad' && <LaunchpadView />}
+        {tab === 'rank' && <RankView />}
         {tab === 'settings' && <SettingsView />}
       </main>
       <BottomNav />

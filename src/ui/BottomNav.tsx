@@ -6,6 +6,7 @@ const TABS: { id: Tab; icon: string; label: string }[] = [
   { id: 'portfolio', icon: '💼', label: 'Porto' },
   { id: 'news', icon: '📰', label: 'Berita' },
   { id: 'launchpad', icon: '🚀', label: 'Launch' },
+  { id: 'rank', icon: '🏆', label: 'Rank' },
   { id: 'settings', icon: '⚙️', label: 'Setelan' }
 ];
 
