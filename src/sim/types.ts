@@ -59,6 +59,13 @@ export interface Instrument {
   lastReturn: number;
 }
 
+export interface SpotHolding {
+  instId: string;
+  qty: number;
+  avgCost: number;
+  openedAt: number;
+}
+
 export interface Position {
   id: string;
   instId: string;
@@ -158,7 +165,18 @@ export interface Fill {
   price: number;
   fee: number;
   pnl: number;
-  kind: 'open' | 'close' | 'liquidate' | 'launch' | 'rug' | 'fee' | 'tp' | 'sl' | 'trail';
+  kind:
+    | 'open'
+    | 'close'
+    | 'liquidate'
+    | 'launch'
+    | 'rug'
+    | 'fee'
+    | 'tp'
+    | 'sl'
+    | 'trail'
+    | 'spot-buy'
+    | 'spot-sell';
   note: string;
 }
 
@@ -221,6 +239,7 @@ export interface SimState {
   instruments: Record<string, Instrument>;
   order: string[];
   positions: Record<string, Position>;
+  spotHoldings: Record<string, SpotHolding>;
   orders: Record<string, Order>;
   events: GameEvent[];
   fills: Fill[];
