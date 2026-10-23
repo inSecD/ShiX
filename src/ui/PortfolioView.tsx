@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
 import { useStore } from '../store';
-import { equity, unrealizedPnl } from '../sim/engine';
+import { equity, spotUnrealizedPnl, spotValue, unrealizedPnl } from '../sim/engine';
 import { positionPnl } from '../sim/trading';
-import { holdingsPnl, worldAssetsValue } from '../sim/world';
+import { holdingsPnl, traderTier, worldAssetsValue } from '../sim/world';
 import { fmtPct, fmtPrice, fmtQty, fmtUsd, fmtTime } from '../lib/format';
 
 function Sparkline({ data, up }: { data: number[]; up: boolean }) {
@@ -42,7 +42,11 @@ export function PortfolioView() {
     .filter((o) => o.status === 'open' || o.status === 'triggered')
     .sort((a, b) => b.createdAt - a.createdAt);
   const eq = equity(sim);
+  const tier = traderTier(sim.world.level, eq);
   const upnl = unrealizedPnl(sim);
+  const spotList = Object.values(sim.spotHoldings);
+  const spotVal = spotValue(sim);
+  const spotPnl = spotUnrealizedPnl(sim);
   const curve = sim.equityCurve;
   const worldValue = worldAssetsValue(sim.world);
   const worldPnl = holdingsPnl(sim.world);
@@ -55,11 +59,11 @@ export function PortfolioView() {
         <div className="panel-head">
           <span>Portfolio</span>
           <button className="ghost tiny" onClick={closeAll} disabled={!positions.length}>
-            Tutup Semua
+            Tutup Futures
           </button>
         </div>
         <div className="panel-body">
-          <div className="grid4">
+          <div className="grid5">
             <div>
               <div className="tiny muted">Equity</div>
               <div className="mono" style={{ fontSize: 17, fontWeight: 800 }}>{fmtUsd(eq)}</div>
@@ -75,6 +79,11 @@ export function PortfolioView() {
               </div>
             </div>
             <div>
+              <div className="tiny muted">Spot</div>
+              <div className="mono" style={{ fontSize: 15, fontWeight: 700 }}>{fmtUsd(spotVal)}</div>
+              <div className={`tiny mono ${spotPnl >= 0 ? 'up' : 'down'}`}>{fmtUsd(spotPnl)}</div>
+            </div>
+            <div>
               <div className="tiny muted">Komoditas</div>
               <div className="mono" style={{ fontSize: 15, fontWeight: 700 }}>{fmtUsd(worldValue)}</div>
               <div className={`tiny mono ${worldPnl >= 0 ? 'up' : 'down'}`}>{fmtUsd(worldPnl)}</div>
@@ -86,11 +95,78 @@ export function PortfolioView() {
 
       <div className="panel">
         <div className="panel-head">
+          <span>Spot Crypto ({spotList.length})</span>
+          <span className="badge">NO LEVERAGE</span>
+        </div>
+        {spotList.length === 0 ? (
+          <div className="empty">Belum ada holding spot</div>
+        ) : (
+          <div className="scroll-x">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>Pair</th>
+                  <th>Qty</th>
+                  <th>Avg</th>
+                  <th>Mark</th>
+                  <th>PnL</th>
+                  <th>Nilai</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {spotList.map((h) => {
+                  const inst = sim.instruments[h.instId];
+                  if (!inst) return null;
+                  const pnl = (inst.price - h.avgCost) * h.qty;
+                  const roe = h.avgCost > 0 ? (inst.price / h.avgCost - 1) * 100 : 0;
+                  return (
+                    <tr key={h.instId}>
+                      <td className="lbl">
+                        <div style={{ fontWeight: 700 }}>{inst.id}</div>
+                        <div className="tiny muted">{inst.name}</div>
+                      </td>
+                      <td>{fmtQty(h.qty)}</td>
+                      <td>{fmtPrice(h.avgCost)}</td>
+                      <td>{fmtPrice(inst.price)}</td>
+                      <td className={pnl >= 0 ? 'up' : 'down'}>
+                        {fmtUsd(pnl)}
+                        <div className="tiny">{fmtPct(roe)}</div>
+                      </td>
+                      <td>{fmtUsd(inst.price * h.qty)}</td>
+                      <td>
+                        <button
+                          className="tiny"
+                          onClick={() => {
+                            select(h.instId);
+                            setTab('market');
+                          }}
+                        >
+                          Kelola
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="panel">
+        <div className="panel-head">
           <span>Aset Dunia</span>
           <button className="ghost tiny" onClick={() => setTab('world')}>Buka</button>
         </div>
         <div className="panel-body">
           <div className="row between tiny">
+            <span className="muted">Tier trader {tier.next ? `· next ${tier.next.name}` : '· max'}</span>
+            <span className={`tier-badge tier-${tier.tier.id}`} title={tier.tier.tagline}>
+              {tier.tier.name}
+            </span>
+          </div>
+          <div className="row between tiny" style={{ marginTop: 6 }}>
             <span className="muted">Komoditas · {worldHoldings} stok</span>
             <b className="mono">{fmtUsd(worldValue)}</b>
           </div>
@@ -107,7 +183,7 @@ export function PortfolioView() {
 
       <div className="panel">
         <div className="panel-head">
-          <span>Posisi ({positions.length})</span>
+          <span>Posisi Futures ({positions.length})</span>
           <span className="badge">Realized {fmtUsd(sim.realized)}</span>
         </div>
         {positions.length === 0 ? (

@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store';
 import { ChartView } from './ChartView';
 import { marketOpen } from '../sim/engine';
-import { depthUsd, estimateFillPrice, liquidationPrice } from '../sim/trading';
+import { depthUsd, estimateFillPrice, isSpotable, liquidationPrice } from '../sim/trading';
 import { fmtPct, fmtPrice, fmtQty, fmtUsd } from '../lib/format';
+import { SpotTicket } from './SpotTicket';
 import type { OrderType } from '../sim/types';
 
 const TYPES: { id: OrderType; label: string }[] = [
@@ -37,6 +38,9 @@ export function TradePanel({ embedded = false }: { embedded?: boolean }) {
   const [tpText, setTpText] = useState('');
   const [slText, setSlText] = useState('');
   const [trailText, setTrailText] = useState('');
+  const [marketMode, setMarketMode] = useState<'futures' | 'spot'>(() =>
+    sim.spotHoldings[selectedId] ? 'spot' : 'futures'
+  );
 
   const pos = useMemo(
     () => Object.values(sim.positions).find((p) => p.instId === selectedId),
@@ -96,9 +100,32 @@ export function TradePanel({ embedded = false }: { embedded?: boolean }) {
     });
   };
 
+  const spotable = isSpotable(inst);
+  const modeTabs = spotable ? (
+    <div className="trade-mode">
+      <button className={marketMode === 'futures' ? 'on' : ''} onClick={() => setMarketMode('futures')}>
+        FUTURES
+      </button>
+      <button className={marketMode === 'spot' ? 'on' : ''} onClick={() => setMarketMode('spot')}>
+        SPOT
+      </button>
+    </div>
+  ) : null;
+
+  if (spotable && marketMode === 'spot') {
+    return (
+      <div className={`trade-panel ${embedded ? 'embedded' : ''}`}>
+        {!embedded && <ChartView inst={inst} tf={tf} />}
+        {modeTabs}
+        <SpotTicket inst={inst} />
+      </div>
+    );
+  }
+
   return (
     <div className={`trade-panel ${embedded ? 'embedded' : ''}`}>
       {!embedded && <ChartView inst={inst} tf={tf} />}
+      {modeTabs}
 
       <div className="panel">
         <div className="panel-head">

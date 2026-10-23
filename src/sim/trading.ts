@@ -49,6 +49,124 @@ export function findPosition(state: SimState, instId: string): Position | undefi
   return Object.values(state.positions).find((p) => p.instId === instId);
 }
 
+export function isSpotable(inst: Instrument | undefined): boolean {
+  return !!inst && (inst.cls === 'crypto' || inst.cls === 'meme' || inst.cls === 'shitcoin');
+}
+
+export interface SpotTradeResult {
+  ok: boolean;
+  msg: string;
+  qty?: number;
+  price?: number;
+  fee?: number;
+  total?: number;
+  pnl?: number;
+}
+
+export function buySpot(
+  state: SimState,
+  settings: Settings,
+  instId: string,
+  usd: number
+): SpotTradeResult {
+  const inst = state.instruments[instId];
+  if (!isSpotable(inst)) return { ok: false, msg: 'Spot hanya tersedia untuk aset kripto' };
+  const value = Number(usd);
+  if (!(value > 0)) return { ok: false, msg: 'Nilai order tidak valid' };
+  if (!(state.cash > 0)) return { ok: false, msg: 'Dana tidak cukup' };
+
+  let qty = value / inst.price;
+  let est = estimateFillPrice(inst, 'buy', qty, settings);
+  let total = est.notional + est.fee;
+  for (let i = 0; i < 3 && total > state.cash; i++) {
+    qty *= state.cash / total;
+    est = estimateFillPrice(inst, 'buy', qty, settings);
+    total = est.notional + est.fee;
+  }
+  if (!(qty > 0) || !Number.isFinite(qty) || total > state.cash + 1e-9) {
+    return { ok: false, msg: 'Dana tidak cukup untuk order ini' };
+  }
+
+  const prev = state.spotHoldings[instId];
+  if (prev) {
+    const nextQty = prev.qty + qty;
+    prev.avgCost = (prev.avgCost * prev.qty + total) / nextQty;
+    prev.qty = nextQty;
+  } else {
+    state.spotHoldings[instId] = {
+      instId,
+      qty,
+      avgCost: total / qty,
+      openedAt: state.simTime
+    };
+  }
+  state.cash -= total;
+  pushFill(state, {
+    id: uid('f'),
+    t: state.simTime,
+    instId,
+    side: 'buy',
+    qty,
+    price: est.price,
+    fee: est.fee,
+    pnl: 0,
+    kind: 'spot-buy',
+    note: `Beli spot @ ${est.price.toPrecision(6)}`
+  });
+  return {
+    ok: true,
+    msg: `Beli spot ${qty.toPrecision(6)} ${inst.id} @ ${est.price.toPrecision(6)}`,
+    qty,
+    price: est.price,
+    fee: est.fee,
+    total
+  };
+}
+
+export function sellSpot(
+  state: SimState,
+  settings: Settings,
+  instId: string,
+  qty: number
+): SpotTradeResult {
+  const inst = state.instruments[instId];
+  if (!isSpotable(inst)) return { ok: false, msg: 'Spot hanya tersedia untuk aset kripto' };
+  const holding = state.spotHoldings[instId];
+  if (!holding || !(holding.qty > 0)) return { ok: false, msg: 'Belum punya holding spot' };
+  const sellQty = Math.min(Number(qty), holding.qty);
+  if (!(sellQty > 0) || !Number.isFinite(sellQty)) return { ok: false, msg: 'Jumlah tidak valid' };
+
+  const est = estimateFillPrice(inst, 'sell', sellQty, settings);
+  const proceeds = est.notional - est.fee;
+  const pnl = (est.price - holding.avgCost) * sellQty - est.fee;
+  state.cash += proceeds;
+  state.realized += pnl;
+  holding.qty -= sellQty;
+  if (holding.qty <= 1e-12) delete state.spotHoldings[instId];
+
+  pushFill(state, {
+    id: uid('f'),
+    t: state.simTime,
+    instId,
+    side: 'sell',
+    qty: sellQty,
+    price: est.price,
+    fee: est.fee,
+    pnl,
+    kind: 'spot-sell',
+    note: `Jual spot @ ${est.price.toPrecision(6)}`
+  });
+  return {
+    ok: true,
+    msg: `Jual spot ${sellQty.toPrecision(6)} ${inst.id} @ ${est.price.toPrecision(6)}`,
+    qty: sellQty,
+    price: est.price,
+    fee: est.fee,
+    total: proceeds,
+    pnl
+  };
+}
+
 export function pushFill(state: SimState, fill: Fill): void {
   state.fills.unshift(fill);
   if (state.fills.length > 400) state.fills.length = 400;

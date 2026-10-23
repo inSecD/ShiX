@@ -153,6 +153,21 @@ export interface RouteEstimate {
   freight: number;
 }
 
+export interface TraderTierDef {
+  id: 'retail' | 'trader' | 'pro' | 'whale' | 'elite' | 'global';
+  name: string;
+  minLevel: number;
+  minEquity: number;
+  tagline: string;
+}
+
+export interface TraderTierStatus {
+  tier: TraderTierDef;
+  next: TraderTierDef | null;
+  levelGap: number;
+  equityGap: number;
+}
+
 export const COMMODITIES: CommodityDef[] = [
   { id: 'food', name: 'Pangan', icon: '🌾', cat: 'agri', base: 10, vol: 0.15, freight: 1.0 },
   { id: 'energy', name: 'Energi', icon: '⚡', cat: 'energy', base: 50, vol: 0.3, freight: 1.2 },
@@ -367,6 +382,32 @@ const PROD_BIAS: Record<CommodityCategory, number> = {
 const XP_LEVELS = [0, 50, 150, 350, 650, 1000, 1500, 2200, 3100, 4300];
 const BLACK_LEVEL = 5;
 const MAX_FACTORY_LEVEL = 10;
+
+export const TRADER_TIERS: TraderTierDef[] = [
+  { id: 'retail', name: 'Retail', minLevel: 1, minEquity: 0, tagline: 'Modal awal, baru masuk pasar' },
+  { id: 'trader', name: 'Trader', minLevel: 3, minEquity: 125_000, tagline: 'Mulai konsisten dan punya arah' },
+  { id: 'pro', name: 'Pro', minLevel: 5, minEquity: 250_000, tagline: 'Portofolio dan jaringan mulai serius' },
+  { id: 'whale', name: 'Whale', minLevel: 7, minEquity: 600_000, tagline: 'Order besar, pasar mulai terasa' },
+  { id: 'elite', name: 'Elite', minLevel: 9, minEquity: 1_200_000, tagline: 'Kelas institusi, skala besar' },
+  { id: 'global', name: 'Global', minLevel: 10, minEquity: 2_500_000, tagline: 'Pemain lintas benua' }
+];
+
+export function traderTier(level: number, netWorth: number): TraderTierStatus {
+  const lv = Math.max(1, Math.min(10, Math.floor(Number.isFinite(level) ? level : 1)));
+  const nw = Math.max(0, Number.isFinite(netWorth) ? netWorth : 0);
+  let index = 0;
+  for (let i = 0; i < TRADER_TIERS.length; i++) {
+    const t = TRADER_TIERS[i];
+    if (lv >= t.minLevel && nw >= t.minEquity) index = i;
+  }
+  const next = TRADER_TIERS[index + 1] ?? null;
+  return {
+    tier: TRADER_TIERS[index],
+    next,
+    levelGap: next ? Math.max(0, next.minLevel - lv) : 0,
+    equityGap: next ? Math.max(0, next.minEquity - nw) : 0
+  };
+}
 
 export function levelFromXp(xp: number): number {
   let level = 1;
