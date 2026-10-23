@@ -41,14 +41,16 @@ Menjalankan 4000 tick simulasi, memeriksa NaN/infinite price, dan mencetak perfo
 
 ## Install ke iPhone
 
-### Opsi A — GitHub Pages (recommended, HTTPS + offline)
+### Opsi A — GitHub Pages (live, HTTPS + offline)
 
-1. Push repo ini ke GitHub (branch `main`).
-2. Repo → **Settings → Pages → Source: GitHub Actions**.
-3. Tunggu workflow hijau → dapat URL `https://<user>.github.io/<repo>/`.
-4. Buka URL itu di **Safari** di iPhone.
-5. Tap tombol **Share** → **Add to Home Screen** → **Add**.
-6. Sekarang ada ikon "ShiX" di home screen; app jalan fullscreen & offline.
+**Live:** https://insecd.github.io/ShiX/
+
+1. Buka URL di atas lewat **Safari** di iPhone.
+2. Tap tombol **Share** → **Add to Home Screen** → **Add**.
+3. Selesai — ikon "ShiX" jalan fullscreen & offline.
+
+> Deploy otomatis tiap `git push` ke `main` (workflow `.github/workflows/deploy.yml`).
+> Repo: https://github.com/inSecD/ShiX
 
 > HTTPS wajib untuk service worker (offline). Lewat HTTP LAN, ikon tetap bisa dipasang tapi tidak bisa offline.
 
