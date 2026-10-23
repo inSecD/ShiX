@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useStore } from '../store';
 import { CLASS_LABEL } from '../sim/universe';
+import { isSpotable } from '../sim/trading';
 import { fmtPct, fmtPrice } from '../lib/format';
 import type { AssetClass } from '../sim/types';
 
@@ -89,7 +90,10 @@ export function MarketView() {
               <div className="sym">
                 {i.id} {w ? <span style={{ color: 'var(--warn)' }}>★</span> : null}
               </div>
-              <div className="nm">{i.name}</div>
+              <div className="nm">
+                {i.name}
+                {isSpotable(i) ? <span className="muted"> · spot</span> : null}
+              </div>
             </div>
             <div className="px">{fmtPrice(i.price)}</div>
             <div className={`ch ${ch >= 0 ? 'up' : 'down'}`}>{fmtPct(ch)}</div>

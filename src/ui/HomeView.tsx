@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
 import { useStore } from '../store';
-import { equity, unrealizedPnl } from '../sim/engine';
+import { equity, spotValue, unrealizedPnl } from '../sim/engine';
 import { positionPnl } from '../sim/trading';
-import { bestRoutes, holdingsPnl, worldAssetsValue } from '../sim/world';
+import { bestRoutes, holdingsPnl, traderTier, worldAssetsValue } from '../sim/world';
 import { fmtPct, fmtPrice, fmtUsd } from '../lib/format';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
@@ -16,7 +16,9 @@ export function HomeView() {
   void v;
 
   const eq = equity(sim);
+  const tier = traderTier(sim.world.level, eq);
   const upnl = unrealizedPnl(sim);
+  const spotVal = spotValue(sim);
   const base = sim.challenge?.startEquity ?? settings.startingCash;
   const ret = base > 0 ? ((eq - base) / base) * 100 : 0;
   const worldValue = worldAssetsValue(sim.world);
@@ -105,6 +107,10 @@ export function HomeView() {
             <b className={upnl >= 0 ? 'up' : 'down'}>{fmtUsd(upnl, true)}</b>
           </div>
           <div className="home-stat">
+            <span>Spot</span>
+            <b>{fmtUsd(spotVal, true)}</b>
+          </div>
+          <div className="home-stat">
             <span>Komoditas</span>
             <b>{fmtUsd(worldValue, true)}</b>
           </div>
@@ -117,7 +123,12 @@ export function HomeView() {
 
       <section className="home-world">
         <div className="home-world-copy">
-          <span className="home-eyebrow">Dunia · Level {sim.world.level}</span>
+          <span className="home-eyebrow">
+            Dunia · Level {sim.world.level}{' '}
+            <span className={`tier-badge tier-${tier.tier.id}`} title={tier.tier.tagline}>
+              {tier.tier.name}
+            </span>
+          </span>
           <b>{fmtUsd(worldValue)}</b>
           <span className={`tiny ${worldPnl >= 0 ? 'up' : 'down'}`}>{fmtUsd(worldPnl)} komoditas</span>
         </div>
@@ -135,6 +146,7 @@ export function HomeView() {
         <div className="home-world-meta">
           <span>{sim.world.factories.length} pabrik</span>
           <span>{sim.world.shipments.filter((s) => s.status === 'in_transit').length} kiriman</span>
+          <span>{tier.next ? `next ${tier.next.name}` : 'tier max'}</span>
         </div>
         <button className="ghost" onClick={() => setTab('world')}>
           🌍 Buka Dunia
@@ -214,7 +226,7 @@ export function HomeView() {
 
         <div className="panel">
           <div className="panel-head">
-            <span>Posisi Terbuka ({positions.length})</span>
+            <span>Posisi Futures ({positions.length})</span>
             <button className="ghost tiny" onClick={() => setTab('portfolio')}>
               Detail
             </button>
