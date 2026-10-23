@@ -1,5 +1,12 @@
-import { createSim, tick, equity, unrealizedPnl } from '../src/sim/engine';
-import { placeOrder, closePositionById, setBracket } from '../src/sim/trading';
+import { createSim, tick, equity, spotUnrealizedPnl, spotValue, unrealizedPnl } from '../src/sim/engine';
+import {
+  buySpot,
+  closePositionById,
+  isSpotable,
+  placeOrder,
+  sellSpot,
+  setBracket
+} from '../src/sim/trading';
 import {
   blackOffers,
   blackTrade,
@@ -8,7 +15,8 @@ import {
   grantXp,
   holdingQty,
   holdingsValue,
-  shipCommodity
+  shipCommodity,
+  traderTier
 } from '../src/sim/world';
 import type { Settings, SimState } from '../src/sim/types';
 
@@ -239,4 +247,61 @@ function openLong(sim: SimState) {
   const offer = offers.find((o) => o.side === 'buy');
   const black = offer ? blackTrade(sim, 'ID', offer.commodity, 'buy', 10) : { ok: false, msg: 'no offer' };
   console.log('black locked:', !locked.ok, '| level:', world.level, '| offers:', offers.length, '| trade:', black.ok, '| seized:', world.stats.blackSeized);
+}
+
+// ---------- trader tiers ----------
+{
+  const cases: [number, number, string][] = [
+    [1, 100000, 'Retail'],
+    [3, 125000, 'Trader'],
+    [5, 250000, 'Pro'],
+    [7, 600000, 'Whale'],
+    [9, 1200000, 'Elite'],
+    [10, 2500000, 'Global'],
+    [10, 100000, 'Retail']
+  ];
+  const results = cases.map(([level, netWorth, expected]) => {
+    const status = traderTier(level, netWorth);
+    return { level, netWorth, expected, actual: status.tier.name };
+  });
+  const failed = results.filter((r) => r.actual !== r.expected);
+  console.log('trader tiers:', failed.length === 0 ? 'ok' : 'FAIL', results.map((r) => `${r.actual}@${r.level}/${r.netWorth}`).join(' | '));
+  if (failed.length) throw new Error(`tier mismatch: ${JSON.stringify(failed)}`);
+}
+
+// ---------- spot crypto ----------
+{
+  const sim = freshSim();
+  const startEq = equity(sim);
+  const buy = buySpot(sim, settings, 'BN', 1000);
+  const holding = sim.spotHoldings['BN'];
+  const afterBuyEq = equity(sim);
+  console.log(
+    'spot buy:',
+    buy.ok,
+    '| qty:',
+    buy.qty?.toPrecision(6),
+    '| value:',
+    spotValue(sim).toFixed(2),
+    '| pnl:',
+    spotUnrealizedPnl(sim).toFixed(2),
+    '| equity delta:',
+    (afterBuyEq - startEq).toFixed(2)
+  );
+  if (!buy.ok || !holding || holding.qty <= 0) throw new Error('spot buy failed');
+  if (Math.abs(afterBuyEq - startEq) > 25) throw new Error('spot equity mark mismatch');
+
+  const stock = buySpot(sim, settings, 'SPX', 1000);
+  console.log('spot stock reject:', !stock.ok, '|', stock.msg);
+  if (stock.ok || isSpotable(sim.instruments['SPX'])) throw new Error('non-crypto spot should be rejected');
+
+  const partialQty = holding.qty / 2;
+  const partial = sellSpot(sim, settings, 'BN', partialQty);
+  console.log('spot partial sell:', partial.ok, '| qty:', partial.qty?.toPrecision(6), '| pnl:', partial.pnl?.toFixed(2));
+  if (!partial.ok || !sim.spotHoldings['BN']) throw new Error('spot partial sell failed');
+
+  const over = sellSpot(sim, settings, 'BN', sim.spotHoldings['BN'].qty * 10);
+  const empty = sellSpot(sim, settings, 'BN', 1);
+  console.log('spot oversell clamps:', over.ok, '| cleaned:', !sim.spotHoldings['BN'], '| empty reject:', !empty.ok);
+  if (!over.ok || sim.spotHoldings['BN'] || empty.ok) throw new Error('spot oversell cleanup failed');
 }
