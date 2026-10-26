@@ -13,6 +13,8 @@ export function HomeView() {
   const v = useStore((s) => s.v);
   const select = useStore((s) => s.select);
   const setTab = useStore((s) => s.setTab);
+  const tutDone = useStore((s) => s.tutDone);
+  const startTut = useStore((s) => s.startTut);
   void v;
 
   const eq = equity(sim);
@@ -75,11 +77,21 @@ export function HomeView() {
 
   return (
     <div className="home">
+      {!tutDone && (
+        <div className="tut-banner">
+          <span>🎓 Baru di ShiX? Ikutin tour step-by-step (ada di More kapan aja).</span>
+          <button className="primary tiny" onClick={() => startTut(0)}>
+            Mulai
+          </button>
+        </div>
+      )}
       <section className="home-hero">
         <div className="home-hero-row">
           <div>
             <div className="home-eyebrow">Net worth · akun simulasi</div>
-            <div className="home-networth">{fmtUsd(eq)}</div>
+            <div className="home-networth" data-tut="networth">
+              {fmtUsd(eq)}
+            </div>
             <div className={`home-return ${ret >= 0 ? 'up' : 'down'}`}>
               {fmtPct(ret)} <span className="muted">sejak awal</span>
             </div>

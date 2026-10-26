@@ -127,7 +127,7 @@ export function TradePanel({ embedded = false }: { embedded?: boolean }) {
       {!embedded && <ChartView inst={inst} tf={tf} />}
       {modeTabs}
 
-      <div className="panel">
+      <div className="panel" data-tut="order-ticket">
         <div className="panel-head">
           <span>Order Ticket</span>
           <span className={open ? 'badge accent' : 'badge warn'}>{open ? 'MARKET OPEN' : 'CLOSED'}</span>

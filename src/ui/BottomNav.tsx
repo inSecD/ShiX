@@ -21,7 +21,12 @@ export function BottomNav() {
   return (
     <nav className="bottom-nav">
       {TABS.map((t) => (
-        <button key={t.id} className={`nav-btn ${active(t.id) ? 'on' : ''}`} onClick={() => setTab(t.id)}>
+        <button
+          key={t.id}
+          className={`nav-btn ${active(t.id) ? 'on' : ''}`}
+          data-tut={`nav-${t.id}`}
+          onClick={() => setTab(t.id)}
+        >
           <span className="ico">{t.icon}</span>
           <span>{t.label}</span>
         </button>

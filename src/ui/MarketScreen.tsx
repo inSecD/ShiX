@@ -24,7 +24,7 @@ export function MarketScreen() {
       <aside className="market-side">
         <TradePanel embedded />
       </aside>
-      <div className="market-list-card">
+      <div className="market-list-card" data-tut="market-list">
         <MarketView />
       </div>
     </div>

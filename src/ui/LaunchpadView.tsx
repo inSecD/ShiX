@@ -4,6 +4,59 @@ import { launchCost, tokenProgress } from '../sim/launchpad';
 import { fmtPct, fmtPrice, fmtQty, fmtUsd } from '../lib/format';
 import type { LaunchToken } from '../sim/types';
 
+/** Small area chart of a bonding-curve token's price history. */
+function CurveChart({ series }: { series: number[] }) {
+  const path = useMemo(() => {
+    if (series.length < 2) return { line: '', area: '' };
+    let min = Infinity;
+    let max = -Infinity;
+    for (const v of series) {
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+    const span = max - min;
+    const pad = span > 0 ? span * 0.08 : Math.abs(max) * 0.02 || 1;
+    const lo = min - pad;
+    const hi = max + pad;
+    const rng = hi - lo || 1;
+    const pts = series.map((v, i) => {
+      const x = (i / (series.length - 1)) * 100;
+      const y = 40 - ((v - lo) / rng) * 40;
+      return `${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`;
+    });
+    const line = pts.join(' ');
+    const area = `${line} L100,40 L0,40 Z`;
+    return { line, area };
+  }, [series]);
+
+  if (!path.line) return <div className="curve-chart empty tiny">Belum ada data curve</div>;
+
+  const up = series[series.length - 1] >= series[0];
+  const stroke = up ? 'var(--up)' : 'var(--down)';
+  const fill = up ? 'rgba(22,208,154,0.16)' : 'rgba(255,77,106,0.16)';
+  const gid = `cc-${up ? 'u' : 'd'}`;
+
+  return (
+    <svg className="curve-chart" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={fill} />
+          <stop offset="100%" stopColor="rgba(0,0,0,0)" />
+        </linearGradient>
+      </defs>
+      <path d={path.area} fill={`url(#${gid})`} stroke="none" />
+      <path
+        d={path.line}
+        fill="none"
+        stroke={stroke}
+        strokeWidth="1.5"
+        vectorEffect="non-scaling-stroke"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function TokenCard({ token }: { token: LaunchToken }) {
   const sim = useStore((s) => s.sim);
   const buyTok = useStore((s) => s.buyTok);
@@ -12,12 +65,24 @@ function TokenCard({ token }: { token: LaunchToken }) {
   const setTab = useStore((s) => s.setTab);
   const [amt, setAmt] = useState('100');
 
-  const held = sim.tokenHoldings[token.id] ?? 0;
+  const spot = token.graduated && token.instId ? sim.instruments[token.instId] : null;
+  const spotHold = token.graduated && token.instId ? sim.spotHoldings[token.instId] : undefined;
+  // after graduation the curve units move into spot holdings, so read from there
+  const held = token.graduated ? (spotHold?.qty ?? 0) : (sim.tokenHoldings[token.id] ?? 0);
   const prog = token.graduated ? 1 : tokenProgress(token);
   const launchPct = token.price0 > 0 ? ((token.price / token.price0 - 1) * 100) : 0;
-  const spot = token.graduated && token.instId ? sim.instruments[token.instId] : null;
   const curPrice = spot ? spot.price : token.price;
   const curPct = token.price0 > 0 ? ((curPrice / token.price0 - 1) * 100) : 0;
+
+  // curve history, continued by recent spot closes once listed
+  const series = useMemo(() => {
+    const curve = token.history?.length ? token.history : [token.price0];
+    if (spot && spot.candles.length) {
+      const closes = spot.candles.slice(-60).map((c) => c.c);
+      return [...curve, ...closes];
+    }
+    return curve;
+  }, [token, spot]);
 
   return (
     <div className="tok">
@@ -38,6 +103,8 @@ function TokenCard({ token }: { token: LaunchToken }) {
           </div>
         </div>
       </div>
+
+      <CurveChart series={series} />
 
       <div className="curve">
         <i style={{ width: `${Math.min(100, prog * 100)}%` }} />
@@ -75,7 +142,8 @@ function TokenCard({ token }: { token: LaunchToken }) {
 
       {held > 0 && (
         <div className="tiny muted" style={{ marginBottom: 6 }}>
-          Holdings: {fmtQty(held)} token = {fmtUsd(held * curPrice)}
+          Holdings: {fmtQty(held)} {token.graduated ? token.ticker : 'token'} = {fmtUsd(held * curPrice)}
+          {spotHold ? <> · avg {fmtPrice(spotHold.avgCost)}</> : null}
         </div>
       )}
 
@@ -143,7 +211,7 @@ export function LaunchpadView() {
 
   return (
     <div>
-      <div className="panel">
+      <div className="panel" data-tut="launch-panel">
         <div className="panel-head">
           <span>Launch Token</span>
           <span className="badge warn">Biaya {fmtUsd(cost)}</span>

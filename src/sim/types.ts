@@ -145,6 +145,7 @@ export interface LaunchToken {
   instId: string | null;
   inflow: number;
   distribute: number;
+  history: number[];
 }
 
 export interface MacroState {
@@ -216,6 +217,8 @@ export interface Challenge {
   attempts: number;
   streak: number;
   rewarded: boolean;
+  scenarioId: string | null;
+  label: string;
 }
 
 export interface Settings {
@@ -246,6 +249,7 @@ export interface SimState {
   tokens: Record<string, LaunchToken>;
   tokenOrder: string[];
   tokenHoldings: Record<string, number>;
+  tokenCost: Record<string, number>;
   cash: number;
   locked: number;
   realized: number;
@@ -256,5 +260,6 @@ export interface SimState {
   bots: Bot[];
   challenge: Challenge | null;
   notices: string[];
+  progress: Record<string, boolean>;
   world: WorldState;
 }

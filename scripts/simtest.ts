@@ -19,6 +19,8 @@ import {
   traderTier
 } from '../src/sim/world';
 import type { Settings, SimState } from '../src/sim/types';
+import { GRAD_MULTIPLE, buyToken, createToken } from '../src/sim/launchpad';
+import { RNG } from '../src/sim/rng';
 
 const settings: Settings = {
   seed: 12345,
@@ -178,10 +180,12 @@ function openLong(sim: SimState) {
     finalPct: null,
     attempts: 1,
     streak: 0,
-    rewarded: false
+    rewarded: false,
+    scenarioId: null,
+    label: 'Tantangan Harian'
   };
   tick(sim, settings);
-  console.log('challenge early win:', sim.challenge.done, '| won:', sim.challenge.won);
+  console.log('challenge early win:', sim.challenge!.done, '| won:', sim.challenge!.won);
 }
 
 {
@@ -199,16 +203,18 @@ function openLong(sim: SimState) {
     finalPct: null,
     attempts: 1,
     streak: 0,
-    rewarded: false
+    rewarded: false,
+    scenarioId: null,
+    label: 'Tantangan Harian'
   };
   tick(sim, settings);
   console.log(
     'challenge eval:',
-    sim.challenge.done,
+    sim.challenge!.done,
     '| won:',
-    sim.challenge.won,
+    sim.challenge!.won,
     '| final:',
-    sim.challenge.finalPct?.toFixed(2),
+    sim.challenge!.finalPct?.toFixed(2),
     '| notice:',
     sim.notices.find(n => n.includes('TANTANGAN')) ?? sim.notices[0]
   );
@@ -291,9 +297,12 @@ function openLong(sim: SimState) {
   if (!buy.ok || !holding || holding.qty <= 0) throw new Error('spot buy failed');
   if (Math.abs(afterBuyEq - startEq) > 25) throw new Error('spot equity mark mismatch');
 
+  // spot is enabled for every asset class now, not just crypto
   const stock = buySpot(sim, settings, 'SPX', 1000);
-  console.log('spot stock reject:', !stock.ok, '|', stock.msg);
-  if (stock.ok || isSpotable(sim.instruments['SPX'])) throw new Error('non-crypto spot should be rejected');
+  const stockHolding = sim.spotHoldings['SPX'];
+  console.log('spot non-crypto allowed:', stock.ok, '|', stock.msg);
+  if (!stock.ok || !stockHolding || stockHolding.qty <= 0) throw new Error('non-crypto spot should be allowed');
+  if (!isSpotable(sim.instruments['SPX'])) throw new Error('isSpotable should cover non-crypto assets');
 
   const partialQty = holding.qty / 2;
   const partial = sellSpot(sim, settings, 'BN', partialQty);
@@ -304,4 +313,54 @@ function openLong(sim: SimState) {
   const empty = sellSpot(sim, settings, 'BN', 1);
   console.log('spot oversell clamps:', over.ok, '| cleaned:', !sim.spotHoldings['BN'], '| empty reject:', !empty.ok);
   if (!over.ok || sim.spotHoldings['BN'] || empty.ok) throw new Error('spot oversell cleanup failed');
+}
+
+// ---------- launchpad graduation migrates presale holdings to spot ----------
+{
+  const sim = freshSim();
+  const rng = new RNG(99);
+  const token = createToken(sim, rng, {
+    name: 'Testcoin',
+    ticker: 'TSTX',
+    kind: 'meme',
+    tags: ['Meme'],
+    owner: 'player',
+    marketing: 1
+  });
+  token.honeypot = false;
+  token.devTokens = 0;
+  token.rug = false;
+
+  const cost = 400;
+  const buy = buyToken(sim, token.id, cost);
+  if (!buy.ok) throw new Error('token buy failed: ' + buy.msg);
+  const heldBefore = sim.tokenHoldings[token.id];
+  if (!(heldBefore > 0)) throw new Error('curve holdings not recorded');
+
+  // force the curve to its graduation threshold (price = price0 * GRAD_MULTIPLE)
+  const targetPrice = token.price0 * GRAD_MULTIPLE;
+  token.supply = Math.sqrt(token.k / targetPrice);
+  token.reserve = token.k / token.supply;
+  token.price = token.reserve / token.supply;
+
+  tick(sim, settings); // tickTokens should graduate the token this hour
+
+  if (!token.graduated) throw new Error('token did not graduate');
+  if ((sim.tokenHoldings[token.id] ?? 0) !== 0) throw new Error('curve holdings should clear on graduation');
+  const spot = sim.spotHoldings[token.ticker];
+  if (!spot || spot.qty <= 0) throw new Error('presale holdings were not migrated to spot');
+  if (Math.abs(spot.qty - heldBefore) > heldBefore * 1e-6) throw new Error('migrated qty mismatch');
+  if (!(spot.avgCost > 0)) throw new Error('migrated cost basis missing');
+  if (spotValue(sim) <= 0) throw new Error('graduated spot not counted in equity');
+
+  console.log(
+    'graduation migrate: ok | curve held:',
+    heldBefore.toPrecision(6),
+    '| spot qty:',
+    spot.qty.toPrecision(6),
+    '| avg:',
+    spot.avgCost.toPrecision(6),
+    '| inst:',
+    token.instId
+  );
 }
