@@ -50,7 +50,7 @@ export function findPosition(state: SimState, instId: string): Position | undefi
 }
 
 export function isSpotable(inst: Instrument | undefined): boolean {
-  return !!inst && (inst.cls === 'crypto' || inst.cls === 'meme' || inst.cls === 'shitcoin');
+  return !!inst;
 }
 
 export interface SpotTradeResult {
@@ -70,7 +70,7 @@ export function buySpot(
   usd: number
 ): SpotTradeResult {
   const inst = state.instruments[instId];
-  if (!isSpotable(inst)) return { ok: false, msg: 'Spot hanya tersedia untuk aset kripto' };
+  if (!isSpotable(inst)) return { ok: false, msg: 'Instrumen tidak ditemukan' };
   const value = Number(usd);
   if (!(value > 0)) return { ok: false, msg: 'Nilai order tidak valid' };
   if (!(state.cash > 0)) return { ok: false, msg: 'Dana tidak cukup' };
@@ -130,7 +130,7 @@ export function sellSpot(
   qty: number
 ): SpotTradeResult {
   const inst = state.instruments[instId];
-  if (!isSpotable(inst)) return { ok: false, msg: 'Spot hanya tersedia untuk aset kripto' };
+  if (!isSpotable(inst)) return { ok: false, msg: 'Instrumen tidak ditemukan' };
   const holding = state.spotHoldings[instId];
   if (!holding || !(holding.qty > 0)) return { ok: false, msg: 'Belum punya holding spot' };
   const sellQty = Math.min(Number(qty), holding.qty);
