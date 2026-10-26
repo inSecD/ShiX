@@ -168,6 +168,7 @@ export function createSim(settings: Settings): SimState {
     tokens: {},
     tokenOrder: [],
     tokenHoldings: {},
+    tokenCost: {},
     cash: settings.startingCash,
     locked: 0,
     realized: 0,
@@ -178,6 +179,7 @@ export function createSim(settings: Settings): SimState {
     bots: createBots(settings.startingCash),
     challenge: null,
     notices: [],
+    progress: {},
     world: createWorld(settings.seed)
   };
 

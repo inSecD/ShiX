@@ -12,7 +12,9 @@ import { LaunchpadView } from './ui/LaunchpadView';
 import { RankView } from './ui/RankView';
 import { SettingsView } from './ui/SettingsView';
 import { MoreView } from './ui/MoreView';
+import { ModesView } from './ui/ModesView';
 import { DailyBar } from './ui/DailyBar';
+import { Tutorial } from './ui/Tutorial';
 
 const TICK_MS = 200;
 
@@ -94,9 +96,11 @@ export default function App() {
         {tab === 'launchpad' && <LaunchpadView />}
         {tab === 'rank' && <RankView />}
         {tab === 'settings' && <SettingsView />}
+        {tab === 'modes' && <ModesView />}
         {tab === 'more' && <MoreView />}
       </main>
       <BottomNav />
+      <Tutorial />
       {toast && <div className={`toast ${toast.kind}`}>{toast.msg}</div>}
     </div>
   );

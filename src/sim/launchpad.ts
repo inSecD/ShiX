@@ -47,7 +47,8 @@ export function createToken(
     graduated: false,
     instId: null,
     inflow: 0,
-    distribute: 0
+    distribute: 0,
+    history: [price0]
   };
   state.tokens[token.id] = token;
   state.tokenOrder.unshift(token.id);
@@ -101,6 +102,7 @@ export function buyToken(
 
   state.cash -= usd;
   state.tokenHoldings[tokenId] = (state.tokenHoldings[tokenId] ?? 0) + received;
+  state.tokenCost[tokenId] = (state.tokenCost[tokenId] ?? 0) + usd;
 
   return { ok: true, msg: 'Beli berhasil', tokens: received, price: token.price };
 }
@@ -132,6 +134,7 @@ export function sellToken(
   token.hype = Math.max(0, token.hype - 0.03);
   state.cash += proceeds;
   state.tokenHoldings[tokenId] = held - units;
+  state.tokenCost[tokenId] = (state.tokenCost[tokenId] ?? 0) * (1 - units / held);
 
   return { ok: true, msg: 'Jual berhasil', proceeds, price: token.price };
 }
@@ -162,6 +165,10 @@ export function tickTokens(state: SimState, rng: RNG): void {
       distributeToMarket(state, token);
       continue;
     }
+
+    // record bonding-curve price history for the curve chart
+    token.history.push(token.price);
+    if (token.history.length > 160) token.history.splice(0, token.history.length - 160);
 
     // organic inflow from hype/marketing
     const rate = (0.0015 + token.hype * 0.005) * token.marketing * rng.float(0.2, 1.6);
@@ -280,6 +287,35 @@ function graduateToken(state: SimState, token: LaunchToken, rng: RNG): void {
     state.order.unshift(inst.id);
   }
   token.instId = inst.id;
+
+  // migrate presale holdings from the bonding curve into spot at listing price.
+  // the player bought on the curve, so their tokens (and cost basis) carry over
+  // as a real spot position they are free to sell on the open market.
+  const held = state.tokenHoldings[token.id] ?? 0;
+  if (held > 0) {
+    const paid = state.tokenCost[token.id] ?? 0;
+    const avgCost = paid > 0 ? paid / held : price;
+    const existing = state.spotHoldings[inst.id];
+    if (existing) {
+      const nextQty = existing.qty + held;
+      existing.avgCost = (existing.avgCost * existing.qty + avgCost * held) / nextQty;
+      existing.qty = nextQty;
+    } else {
+      state.spotHoldings[inst.id] = {
+        instId: inst.id,
+        qty: held,
+        avgCost,
+        openedAt: state.simTime
+      };
+    }
+    state.tokenHoldings[token.id] = 0;
+    state.tokenCost[token.id] = 0;
+    state.notices.push(
+      `GRADUASI: ${held.toPrecision(4)} ${token.ticker} kamu masuk sebagai spot & bisa dijual bebas`
+    );
+    if (state.notices.length > 20) state.notices.splice(0, state.notices.length - 20);
+  }
+  if (token.owner === 'player') state.progress.graduated = true;
 
   // graduation pump then distribution
   inst.pressure += rng.float(0.4, 1.2);

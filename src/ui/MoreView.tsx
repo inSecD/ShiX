@@ -4,12 +4,15 @@ const ITEMS: { tab: Tab; icon: string; title: string; desc: string }[] = [
   { tab: 'world', icon: '🌍', title: 'Dunia', desc: 'Komoditas, rute kirim, pabrik, dan pasar gelap' },
   { tab: 'news', icon: '📰', title: 'Berita', desc: 'Headline makro, whale, dan event pasar' },
   { tab: 'launchpad', icon: '🚀', title: 'Launchpad', desc: 'Luncurkan token, bonding curve, cek rug risk' },
+  { tab: 'modes', icon: '🎯', title: 'Skenario & Misi', desc: 'Misi latihan berhadiah + skenario pasar' },
   { tab: 'settings', icon: '⚙️', title: 'Setelan & Tantangan', desc: 'Seed dunia, modal, save/load, daily challenge' },
   { tab: 'trade', icon: '⚡', title: 'Trade Klasik', desc: 'Chart penuh + order ticket dalam satu layar' }
 ];
 
 export function MoreView() {
   const setTab = useStore((s) => s.setTab);
+  const startTut = useStore((s) => s.startTut);
+  const tutDone = useStore((s) => s.tutDone);
 
   return (
     <div className="more">
@@ -29,6 +32,14 @@ export function MoreView() {
               <span className="menu-arrow">›</span>
             </button>
           ))}
+          <button className="menu-row" onClick={() => startTut(0)}>
+            <span className="menu-ico">🎓</span>
+            <span className="menu-copy">
+              <b>Tutorial step-by-step</b>
+              <span> Tour berhighlight di tiap elemen penting</span>
+            </span>
+            <span className="menu-arrow">{tutDone ? '↻' : '▶'}</span>
+          </button>
         </div>
       </div>
 

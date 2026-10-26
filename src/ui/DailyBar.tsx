@@ -20,10 +20,14 @@ export function DailyBar() {
   const hours = left % 24;
 
   return (
-    <button className={`daily-bar ${ch.done ? (ch.won ? 'won' : 'lost') : ''}`} onClick={() => setTab('settings')}>
+    <button
+      className={`daily-bar ${ch.done ? (ch.won ? 'won' : 'lost') : ''}`}
+      onClick={() => setTab(ch.scenarioId ? 'modes' : 'settings')}
+    >
       <div className="daily-top">
         <span className="daily-title">
-          TANTANGAN HARIAN <span className="daily-day">{ch.dayKey}</span>
+          {ch.label || 'TANTANGAN HARIAN'}{' '}
+          {!ch.scenarioId && <span className="daily-day">{ch.dayKey}</span>}
         </span>
         <span className="mono" style={{ fontSize: 11 }}>
           {ch.done ? (ch.won ? 'LOLOS' : 'GAGAL') : `${fmtPct(pct)} / +${target.toFixed(0)}%`}

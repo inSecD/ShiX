@@ -9,6 +9,8 @@ import {
   setBracket
 } from './sim/trading';
 import { buyToken, createToken, launchCost, sellToken } from './sim/launchpad';
+import { applyScenario, scenarioById } from './sim/scenarios';
+import { claimMissionRewards } from './sim/missions';
 import { RNG, hashString, randomSeed } from './sim/rng';
 import { makeMemeName, makeShitName } from './sim/names';
 import { createBots } from './sim/bots';
@@ -42,6 +44,7 @@ export type Tab =
   | 'launchpad'
   | 'rank'
   | 'settings'
+  | 'modes'
   | 'more';
 export type Timeframe = '1h' | '4h' | '1D' | '1W';
 
@@ -104,10 +107,49 @@ function writeDailyMeta(meta: DailyMeta): void {
   }
 }
 
+const TUT_KEY = 'shix.tutorial.v1';
+
+export interface TutState {
+  step: number;
+  done: boolean;
+}
+
+export function readTut(): TutState | null {
+  try {
+    const raw = localStorage.getItem(TUT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<TutState>;
+    return { step: Number(parsed.step) || 0, done: !!parsed.done };
+  } catch {
+    return null;
+  }
+}
+
+export function writeTut(state: TutState): void {
+  try {
+    localStorage.setItem(TUT_KEY, JSON.stringify(state));
+  } catch {
+    /* ignore */
+  }
+}
+
 function normalizeSim(sim: SimState, startingCash: number): SimState {
   if (!Array.isArray(sim.bots) || sim.bots.length === 0) sim.bots = createBots(startingCash);
   if (sim.challenge === undefined) sim.challenge = null;
+  if (sim.challenge) {
+    if (sim.challenge.scenarioId === undefined) sim.challenge.scenarioId = null;
+    if (!sim.challenge.label) sim.challenge.label = 'Tantangan Harian';
+  }
   if (!Array.isArray(sim.notices)) sim.notices = [];
+  if (!sim.progress || typeof sim.progress !== 'object') sim.progress = {};
+  if (!sim.tokenCost || typeof sim.tokenCost !== 'object') sim.tokenCost = {};
+  if (!sim.tokenHoldings || typeof sim.tokenHoldings !== 'object') sim.tokenHoldings = {};
+  if (sim.tokens && typeof sim.tokens === 'object') {
+    for (const tk of Object.values(sim.tokens)) {
+      if (!tk) continue;
+      if (!Array.isArray(tk.history) || tk.history.length === 0) tk.history = [tk.price];
+    }
+  }
   if (!sim.spotHoldings || typeof sim.spotHoldings !== 'object') sim.spotHoldings = {};
   for (const [id, holding] of Object.entries(sim.spotHoldings)) {
     if (
@@ -123,6 +165,28 @@ function normalizeSim(sim: SimState, startingCash: number): SimState {
     }
     holding.instId = id;
     if (!Number.isFinite(holding.openedAt)) holding.openedAt = sim.simTime;
+  }
+  // heal older saves where a token graduated but its presale holdings were never
+  // migrated to spot (they were stuck and unsellable). carry them over now.
+  for (const tokenId of Object.keys(sim.tokenHoldings)) {
+    const held = sim.tokenHoldings[tokenId] ?? 0;
+    if (!(held > 0)) continue;
+    const token = sim.tokens[tokenId];
+    if (!token || !token.graduated || !token.instId) continue;
+    const inst = sim.instruments[token.instId];
+    if (!inst) continue;
+    const paid = sim.tokenCost[tokenId] ?? 0;
+    const avgCost = paid > 0 ? paid / held : inst.price;
+    const existing = sim.spotHoldings[inst.id];
+    if (existing) {
+      const nextQty = existing.qty + held;
+      existing.avgCost = (existing.avgCost * existing.qty + avgCost * held) / nextQty;
+      existing.qty = nextQty;
+    } else {
+      sim.spotHoldings[inst.id] = { instId: inst.id, qty: held, avgCost, openedAt: sim.simTime };
+    }
+    sim.tokenHoldings[tokenId] = 0;
+    sim.tokenCost[tokenId] = 0;
   }
   for (const pos of Object.values(sim.positions)) {
     if (pos.tp === undefined) pos.tp = null;
@@ -218,6 +282,16 @@ interface Store {
   setRisk: (posId: string, tp: number | null, sl: number | null, trail: number | null) => void;
   startDaily: () => void;
   exitDaily: () => void;
+  startScenario: (id: string) => void;
+  exitScenario: () => void;
+
+  tutActive: boolean;
+  tutStep: number;
+  tutDone: boolean;
+  startTut: (from?: number) => void;
+  tutNext: () => void;
+  tutPrev: () => void;
+  tutEnd: (completed?: boolean) => void;
 
   worldBuy: (country: string, commodity: string, qty: number) => void;
   worldSell: (country: string, commodity: string, qty: number) => void;
@@ -251,6 +325,9 @@ export const useStore = create<Store>((set, get) => ({
   worldCountry: 'ID',
   booted: false,
   saving: false,
+  tutActive: false,
+  tutStep: 0,
+  tutDone: false,
 
   boot: async () => {
     const hash = (window.location.hash || '').replace('#/', '') as Tab;
@@ -264,10 +341,16 @@ export const useStore = create<Store>((set, get) => ({
       'launchpad',
       'rank',
       'settings',
+      'modes',
       'more'
     ];
     const initialTab = valid.includes(hash) ? hash : 'home';
     const blob = await loadState<SaveBlob>();
+    const tut = readTut();
+    // brand new player: auto-launch the guided tutorial overlay
+    const firstRun = tut === null;
+    const tutState: TutState = tut ?? { step: 0, done: false };
+    if (firstRun) writeTut(tutState);
     if (blob && blob.sim && blob.sim.instruments) {
       const settings = { ...DEFAULT_SETTINGS, ...blob.settings };
       const sim = normalizeSim(blob.sim, settings.startingCash);
@@ -277,11 +360,20 @@ export const useStore = create<Store>((set, get) => ({
         watchlist: blob.watchlist?.length ? blob.watchlist : get().watchlist,
         worldCountry: sim.world.home,
         tab: initialTab,
-        booted: true
+        booted: true,
+        tutStep: tutState.step,
+        tutDone: tutState.done,
+        tutActive: firstRun && !tutState.done
       });
       set((s) => ({ v: s.v + 1 }));
     } else {
-      set({ booted: true, tab: initialTab });
+      set({
+        booted: true,
+        tab: initialTab,
+        tutStep: tutState.step,
+        tutDone: tutState.done,
+        tutActive: firstRun && !tutState.done
+      });
     }
   },
 
@@ -316,21 +408,27 @@ export const useStore = create<Store>((set, get) => ({
     const { sim, settings } = get();
     for (let i = 0; i < n; i++) tick(sim, settings);
 
+    claimMissionRewards(sim, settings.startingCash);
+
     const ch = sim.challenge;
     if (ch && ch.done && !ch.rewarded) {
       ch.rewarded = true;
-      const meta = readDailyMeta();
       const pct = ch.finalPct ?? 0;
-      if (ch.won) {
-        meta.streak =
-          meta.lastDay === ch.dayKey ? Math.max(1, meta.streak) : meta.lastDay === yesterdayKey() ? meta.streak + 1 : 1;
-        meta.lastDay = ch.dayKey;
-      } else {
-        meta.streak = 0;
-        meta.lastDay = ch.dayKey;
+      // daily streak bookkeeping only applies to the real daily challenge,
+      // not to scenario runs (they use their own ids as dayKey).
+      if (!ch.scenarioId) {
+        const meta = readDailyMeta();
+        if (ch.won) {
+          meta.streak =
+            meta.lastDay === ch.dayKey ? Math.max(1, meta.streak) : meta.lastDay === yesterdayKey() ? meta.streak + 1 : 1;
+          meta.lastDay = ch.dayKey;
+        } else {
+          meta.streak = 0;
+          meta.lastDay = ch.dayKey;
+        }
+        meta.best = Math.max(meta.best, pct);
+        writeDailyMeta(meta);
       }
-      meta.best = Math.max(meta.best, pct);
-      writeDailyMeta(meta);
     }
 
     if (sim.notices.length) {
@@ -351,6 +449,7 @@ export const useStore = create<Store>((set, get) => ({
   order: (p) => {
     const { sim, settings, notify } = get();
     const res = placeOrder(sim, settings, p);
+    if (res.ok) sim.progress.bought = true;
     notify(res.msg, res.ok ? 'ok' : 'err');
     set((s) => ({ v: s.v + 1 }));
   },
@@ -378,6 +477,7 @@ export const useStore = create<Store>((set, get) => ({
   spotBuy: (instId, usd) => {
     const { sim, settings, notify } = get();
     const res = buySpot(sim, settings, instId, usd);
+    if (res.ok) sim.progress.bought = true;
     notify(res.msg, res.ok ? 'ok' : 'err');
     set((s) => ({ v: s.v + 1 }));
   },
@@ -413,6 +513,7 @@ export const useStore = create<Store>((set, get) => ({
   worldBuild: (commodity) => {
     const { sim, notify } = get();
     const res = buildFactory(sim, commodity);
+    if (res.ok) sim.progress.factory = true;
     notify(res.msg, res.ok ? 'ok' : 'err');
     set((s) => ({ v: s.v + 1 }));
   },
@@ -427,6 +528,7 @@ export const useStore = create<Store>((set, get) => ({
   setRisk: (posId, tp, sl, trail) => {
     const { sim, notify } = get();
     const res = setBracket(sim, posId, tp, sl, trail);
+    if (res.ok && (tp != null || sl != null || trail != null)) sim.progress.bracket = true;
     notify(res.msg, res.ok ? 'ok' : 'err');
     set((s) => ({ v: s.v + 1 }));
   },
@@ -452,7 +554,9 @@ export const useStore = create<Store>((set, get) => ({
       finalPct: null,
       attempts: prev && prev.dayKey === dayKey ? prev.attempts + 1 : 1,
       streak: meta.streak,
-      rewarded: false
+      rewarded: false,
+      scenarioId: null,
+      label: 'Tantangan Harian'
     };
     set({
       sim,
@@ -475,6 +579,87 @@ export const useStore = create<Store>((set, get) => ({
     get().notify('Mode harian selesai. Dunia normal baru dibuat.', 'ok');
   },
 
+  startScenario: (id) => {
+    const sc = scenarioById(id);
+    if (!sc) return;
+    const base = get().settings;
+    const next: Settings = {
+      ...base,
+      seed: hashString(`shix-scenario:${id}:${dayKeyOf()}`),
+      startingCash: sc.startingCash,
+      difficulty: sc.difficulty,
+      maxLeverage: sc.maxLeverage
+    };
+    const sim = createSim(next);
+    applyScenario(sim, sc);
+    sim.challenge = {
+      dayKey: `${id}:${dayKeyOf()}`,
+      seed: next.seed,
+      startEquity: equity(sim),
+      targetPct: sc.targetPct,
+      startTick: sim.ticks,
+      deadlineTick: sim.ticks + sc.days * 24,
+      done: false,
+      won: false,
+      bestPct: 0,
+      finalPct: null,
+      attempts: 1,
+      streak: 0,
+      rewarded: false,
+      scenarioId: sc.id,
+      label: sc.name
+    };
+    set({
+      sim,
+      settings: next,
+      selectedId: 'BN',
+      watchlist: ['BN', 'EF', 'DGE'],
+      worldCountry: sim.world.home,
+      tab: 'market'
+    });
+    set((st) => ({ v: st.v + 1 }));
+    get().notify(`Skenario "${sc.name}" dimulai — ${sc.tagline}`, 'ok');
+  },
+
+  exitScenario: () => {
+    const s = get().settings;
+    const next: Settings = { ...s, seed: randomSeed(), startingCash: 100000, difficulty: 'normal', maxLeverage: 10 };
+    const sim = createSim(next);
+    set({
+      sim,
+      settings: next,
+      selectedId: 'BN',
+      watchlist: ['BN', 'EF', 'DGE'],
+      worldCountry: sim.world.home,
+      tab: 'market'
+    });
+    set((st) => ({ v: st.v + 1 }));
+    get().notify('Skenario selesai. Dunia normal baru dibuat.', 'ok');
+  },
+
+  startTut: (from) => {
+    const saved = readTut();
+    const step = from ?? (saved && !saved.done ? saved.step : 0);
+    writeTut({ step, done: false });
+    set({ tutActive: true, tutStep: step, tutDone: false });
+  },
+  tutNext: () => {
+    set((s) => ({ tutStep: s.tutStep + 1 }));
+    const st = get();
+    writeTut({ step: st.tutStep, done: false });
+  },
+  tutPrev: () => {
+    set((s) => ({ tutStep: Math.max(0, s.tutStep - 1) }));
+    const st = get();
+    writeTut({ step: st.tutStep, done: false });
+  },
+  tutEnd: (completed = false) => {
+    const st = get();
+    const done = completed ? true : st.tutDone;
+    writeTut({ step: st.tutStep, done });
+    set({ tutActive: false, tutDone: done });
+  },
+
   launch: (name, ticker, kind, tags) => {
     const { sim, settings, notify } = get();
     const cost = launchCost(settings);
@@ -492,6 +677,7 @@ export const useStore = create<Store>((set, get) => ({
       owner: 'player',
       marketing: 0.8
     });
+    sim.progress.launched = true;
     notify(`Token ${token.ticker} live di launchpad`, 'ok');
     set((s) => ({ v: s.v + 1 }));
   },

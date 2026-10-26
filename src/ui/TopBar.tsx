@@ -45,7 +45,7 @@ export function TopBar() {
         </button>
       </div>
 
-      <div className="topbar-foot">
+      <div className="topbar-foot" data-tut="speed">
         {SPEEDS.map((s) => (
           <button
             key={s.v}
