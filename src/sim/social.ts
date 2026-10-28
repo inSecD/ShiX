@@ -1,4 +1,5 @@
 import type { Bot, BotStrategy, ConvoState, PendingEvent, SimState, SocialState } from './types';
+import { perksOf } from './perks';
 
 /** lokasi tiap NPC nongol — nyambung ke unlock aset (Fase 1-2), jadi makin kaya makin banyak yang bisa ditemui */
 export const NPC_AT: Record<string, string> = {
@@ -86,7 +87,9 @@ export function npcsAtLocation(state: SimState, locId: string): Bot[] {
 export function chatCooldownLeft(state: SimState, botId: string): number {
   const last = state.social.lastChat[botId];
   if (last == null) return 0;
-  return Math.max(0, CHAT_COOLDOWN - (state.ticks - last));
+  // perk networking (aset/bisnis) memotong jeda ngobrol
+  const gap = Math.max(1, CHAT_COOLDOWN - perksOf(state).chatCooldownCut);
+  return Math.max(0, gap - (state.ticks - last));
 }
 
 function rumorText(state: SimState, bot: Bot, pending: PendingEvent, tier: number): string {
@@ -133,8 +136,9 @@ export function chatWith(state: SimState, botId: string): ChatResult {
 
   // coba bocorin event berikutnya (bukan cheat: cuma sinyal arah/topik, tetep butuh keputusan lo)
   let rumor: string | null = null;
-  const tier = rumorTier(social.friendship[botId]);
-  if (tier > 0 && state.pendingEvent && !social.rumor && Math.random() < 0.6) {
+  const perks = perksOf(state);
+  const tier = Math.min(3, rumorTier(social.friendship[botId]) + perks.rumorTierBonus);
+  if (tier > 0 && state.pendingEvent && !social.rumor && Math.random() < 0.6 * perks.rumorChanceMult) {
     rumor = rumorText(state, bot, state.pendingEvent, tier);
     social.rumor = { botId, text: rumor, tier, evId: state.pendingEvent.ev.id, at: state.simTime };
   }

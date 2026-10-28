@@ -2895,3 +2895,48 @@ input[type='range']::-webkit-slider-thumb {
   line-height: 1.5;
   word-break: break-word;
 }
+
+/* ---------- Perk (Fase 5) ---------- */
+.perk-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.perk-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.perk-ico {
+  font-size: 18px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0c111b;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  flex: 0 0 auto;
+}
+
+.perk-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.perk-copy b {
+  font-size: 13px;
+}
+
+.asset-perk-live {
+  margin-top: 3px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent);
+}

@@ -2,6 +2,7 @@ import { createSim, tick, equity, spotUnrealizedPnl, spotValue, unrealizedPnl } 
 import {
   buySpot,
   closePositionById,
+  estimateFillPrice,
   isSpotable,
   placeOrder,
   sellSpot,
@@ -25,6 +26,7 @@ import * as hubMod from '../src/sim/hub';
 import * as socialMod from '../src/sim/social';
 import * as businessMod from '../src/sim/business';
 import * as feedMod from '../src/sim/feed';
+import * as perksMod from '../src/sim/perks';
 import { applyEvent, generateEvent } from '../src/sim/events';
 import { RNG } from '../src/sim/rng';
 
@@ -657,5 +659,68 @@ function openLong(sim: SimState) {
     '| kinds:', [...new Set(feed.posts.map((p) => p.kind))].join(','),
     '| example:', feed.posts.find((p) => p.kind !== 'you')?.text.slice(0, 52),
     '| player post: ok | normalize: ok'
+  );
+}
+
+// ---------- Phase 5: perks (fee, cooldown ngobrol, rumor) ----------
+{
+  const sim = freshSim();
+  const { perksOf, feeMultOf, activePerks, perkHint } = perksMod;
+
+  // tanpa aset → netral
+  const bare = perksOf(sim);
+  if (bare.feeDiscount !== 0 || bare.chatCooldownCut !== 0 || bare.rumorChanceMult !== 1 || bare.rumorTierBonus !== 0)
+    throw new Error('perks must be neutral when nothing owned');
+  if (feeMultOf(sim) !== 1) throw new Error('feeMult must be 1 with no perks');
+
+  // fee beneran lebih murah: mansion (−15%)
+  const inst = sim.instruments['BN'];
+  const feeBase = estimateFillPrice(inst, 'buy', 10, settings).fee;
+  sim.lifestyle.owned.push('mansion');
+  const feePerk = estimateFillPrice(inst, 'buy', 10, settings, feeMultOf(sim)).fee;
+  if (!(feePerk < feeBase)) throw new Error('mansion perk must reduce fee');
+  if (Math.abs(feePerk / feeBase - 0.85) > 1e-9) throw new Error('mansion fee discount should be 15%');
+
+  // semua sumber numpuk (mansion 15 + jet 5 + island 25 = 45%), cap 50%
+  sim.lifestyle.owned.push('jet', 'island'); // jet −5% + island −25%
+  const p = perksOf(sim);
+  if (Math.abs(p.feeDiscount - 0.45) > 1e-9) throw new Error('fee discounts should stack to 45%, got ' + p.feeDiscount);
+  if (Math.abs(feeMultOf(sim) - 0.55) > 1e-9) throw new Error('feeMult should be 0.55');
+  if (p.rumorChanceMult !== 2) throw new Error('jet should double rumor chance');
+  if (p.rumorTierBonus !== 1) throw new Error('island should add rumor tier');
+  if (Math.round(p.chatCooldownCut) !== 0) throw new Error('no cooldown perk owned yet');
+
+  // bikin milik yacht+watch biar cooldown kepotong
+  sim.lifestyle.owned.push('yacht', 'watch'); // 3 + 1 = 4, dari base 6 → gap 2
+  sim.social.lastChat['bot_0'] = sim.ticks;
+  const wait = socialMod.chatCooldownLeft(sim, 'bot_0');
+  if (wait !== 2) throw new Error('perk should cut chat cooldown, got ' + wait);
+
+  // fee cap: tambah bank (bisnis −8%) → 53% > cap, harus tetap 50%
+  sim.business.owned.push({ id: 'bank', level: 1 });
+  if (feeMultOf(sim) !== 0.5) throw new Error('feeMult must stay capped at 50%, got ' + feeMultOf(sim));
+
+  // perkHint & activePerks
+  if (!perkHint('asset', 'mansion')?.includes('15')) throw new Error('perkHint should describe fee discount');
+  if (perkHint('asset', 'house_basic') !== null) throw new Error('non-perk asset should have no hint');
+  const act = activePerks(sim);
+  if (act.length < 3) throw new Error('activePerks should list fee/rumor perks: ' + act.length);
+  if (!act.some((x) => x.text.includes('50%'))) throw new Error('activePerks should show capped fee discount');
+
+  // rumor tier bonus: friendship tier 2 + bonus 1 → tier 3 pas ngobrol
+  sim.social.friendship['bot_0'] = 55; // tier 2
+  sim.social.lastChat['bot_0'] = sim.ticks - 999;
+  const origRandom = Math.random;
+  Math.random = () => 0;
+  const chat = socialMod.chatWith(sim, 'bot_0');
+  Math.random = origRandom;
+  if (!chat.rumor || !sim.social.rumor || sim.social.rumor.tier !== 3)
+    throw new Error('island perk should bump rumor tier 2 → 3, got tier ' + sim.social.rumor?.tier);
+
+  console.log(
+    'perk fee: 100% →', Math.round(feeMultOf(sim) * 100) + '%',
+    '| cooldown 6 →', wait + 'j',
+    '| rumor tier bonus: ok',
+    '| active perks:', act.map((x) => x.name).join(', ')
   );
 }

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useStore } from '../store';
 import { estimateFillPrice } from '../sim/trading';
+import { feeMultOf } from '../sim/perks';
 import { fmtPct, fmtPrice, fmtQty, fmtUsd } from '../lib/format';
 import type { Instrument } from '../sim/types';
 
@@ -18,7 +19,7 @@ export function SpotTicket({ inst }: { inst: Instrument }) {
   const qty = side === 'buy'
     ? usd / inst.price
     : Math.min(usd / inst.price, holding?.qty ?? 0);
-  const est = estimateFillPrice(inst, side, qty, settings);
+  const est = estimateFillPrice(inst, side, qty, settings, feeMultOf(sim));
   const total = side === 'buy' ? est.notional + est.fee : est.notional - est.fee;
   const holdingPnl = holding ? (inst.price - holding.avgCost) * holding.qty : 0;
   const holdingRoe = holding && holding.avgCost > 0 ? (inst.price / holding.avgCost - 1) * 100 : 0;

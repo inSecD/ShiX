@@ -16,6 +16,7 @@ import { createHub } from './hub';
 import { createSocial } from './social';
 import { businessesValue, businessTick, createBusiness } from './business';
 import { createFeed, feedTick } from './feed';
+import { feeMultOf } from './perks';
 import type { AssetClass, Candle, Fill, Instrument, Position, Settings, SimState } from './types';
 
 export const HOUR = 3_600_000;
@@ -472,7 +473,7 @@ function processOrders(state: SimState, settings: Settings, rng: RNG): void {
 
     const fillFrac = clamp(0.3 + inst.liquidity * 0.85, 0.15, 1) * rng.float(0.55, 1);
     let qty = remaining * fillFrac;
-    const feeRate = settings.feeMaker;
+    const feeRate = settings.feeMaker * feeMultOf(state);
     const price = o.side === 'buy' ? Math.min(limit, inst.price) : Math.max(limit, inst.price);
     const affordable = Math.max(0, ((state.cash - qty * price * feeRate) * o.lev) / price);
     if (affordable < qty) qty = affordable;
@@ -557,7 +558,7 @@ function closeBracket(
   const inst = state.instruments[pos.instId];
   if (!inst) return;
   const side = pos.side === 'long' ? 'sell' : 'buy';
-  const est = estimateFillPrice(inst, side, pos.qty, settings);
+  const est = estimateFillPrice(inst, side, pos.qty, settings, feeMultOf(state));
   const dir = pos.side === 'long' ? 1 : -1;
   const movePct = pos.entry > 0 ? ((est.price - pos.entry) / pos.entry) * 100 * dir : 0;
   const res = closePosition(state, pos.id, pos.qty, est.price, est.fee, kind as Fill['kind'], label);
@@ -709,6 +710,6 @@ export function estimateOrderFill(
 ): { price: number; fee: number; slippage: number } {
   const inst = state.instruments[instId];
   if (!inst) return { price: 0, fee: 0, slippage: 0 };
-  const est = estimateFillPrice(inst, side, qty, settings);
+  const est = estimateFillPrice(inst, side, qty, settings, feeMultOf(state));
   return { price: est.price, fee: est.fee, slippage: est.slippage };
 }

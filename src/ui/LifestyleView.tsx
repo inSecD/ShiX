@@ -19,6 +19,7 @@ import {
   upgradeCost,
   type BusinessDef
 } from '../sim/business';
+import { activePerks, perkHint } from '../sim/perks';
 
 const CATS: { key: AssetCategory; label: string }[] = [
   { key: 'property', label: 'Properti' },
@@ -29,6 +30,7 @@ const CATS: { key: AssetCategory; label: string }[] = [
 function AssetRow({ def, owned, canAfford }: { def: AssetDef; owned: boolean; canAfford: boolean }) {
   const lifestyleBuy = useStore((s) => s.lifestyleBuy);
   const lifestyleSell = useStore((s) => s.lifestyleSell);
+  const perk = perkHint('asset', def.id);
 
   return (
     <div className={`asset-row${owned ? ' owned' : ''}`}>
@@ -43,6 +45,7 @@ function AssetRow({ def, owned, canAfford }: { def: AssetDef; owned: boolean; ca
         {def.perks.length > 0 && (
           <div className="asset-perks">{def.perks.map((p) => `✦ ${p}`).join('  ')}</div>
         )}
+        {owned && perk && <div className="asset-perk-live">{perk} · AKTIF</div>}
       </div>
       {owned ? (
         <button className="short" onClick={() => lifestyleSell(def.id)}>
@@ -79,7 +82,8 @@ function BusinessRow({ def, level, cash }: { def: BusinessDef; level: number | n
           {owned ? `Lv ${level}/${def.maxLevel} · ` : ''}
           +{fmtUsd(income)}/jam · rawat {fmtUsd(upkeep)}/hari
         </div>
-        {owned && <div className="asset-perks">Nilai bisnis {fmtUsd(businessValueOf(def, level), true)}</div>}
+        {perkHint('business', def.id) && <div className="asset-perks">{perkHint('business', def.id)}</div>}
+        {owned && <div className="asset-perk-live">Nilai bisnis {fmtUsd(businessValueOf(def, level), true)}</div>}
       </div>
       {owned ? (
         maxed ? (
@@ -110,6 +114,7 @@ export function LifestyleView() {
   const bs = sim.business;
   const bizIncome = businessIncomePerTick(bs);
   const bizUpkeep = businessDailyUpkeep(bs);
+  const perks = activePerks(sim);
 
   return (
     <div className="lifestyle">
@@ -131,6 +136,31 @@ export function LifestyleView() {
             <span className="k">Rawat / hari</span>
             <span className="v">{fmtUsd(upkeep)}</span>
           </div>
+        </div>
+      </div>
+
+      <div className="panel">
+        <div className="panel-head">
+          <span>Perk Aktif</span>
+          <span className={`badge${perks.length > 0 ? ' accent' : ''}`}>{perks.length} aktif</span>
+        </div>
+        <div className="panel-body perk-list">
+          {perks.length === 0 && (
+            <div className="tiny muted">
+              Belum ada perk. Aset & bisnis pilihan membuka efek beneran: fee lebih murah, ngobrol lebih
+              sering, rumor lebih tajam.
+            </div>
+          )}
+          {perks.map((p) => (
+            <div className="perk-row" key={p.name}>
+              <span className="perk-ico">{p.icon}</span>
+              <div className="perk-copy">
+                <b>{p.name}</b>
+                <span className="tiny">{p.text}</span>
+              </div>
+              <span className="badge accent">ON</span>
+            </div>
+          ))}
         </div>
       </div>
 

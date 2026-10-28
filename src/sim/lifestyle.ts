@@ -77,7 +77,7 @@ export const ASSET_DEFS: AssetDef[] = [
     price: 26_000_000,
     upkeep: 6_500,
     desc: 'Kastil mini di puncak bukit, garda keamanan 24 jam.',
-    perks: ['Buka lokasi: Mansion', 'Home office → diskon fee (Fase 5)'],
+    perks: ['Buka lokasi: Mansion', 'Perk: fee trading −15%'],
     locId: 'mansion'
   },
   {
@@ -89,7 +89,7 @@ export const ASSET_DEFS: AssetDef[] = [
     price: 160_000_000,
     upkeep: 32_000,
     desc: 'Seluruh pulau. Status ultimate. Pajawat punya dermaga sendiri.',
-    perks: ['Buka lokasi: Pulau'],
+    perks: ['Buka lokasi: Pulau', 'Perk: fee −25% · rumor +1 tier'],
     locId: 'island'
   },
 
@@ -127,7 +127,7 @@ export const ASSET_DEFS: AssetDef[] = [
     price: 3_400_000,
     upkeep: 2_600,
     desc: 'Kapal mewah buat pesta laut & networking.',
-    perks: ['Buka lokasi: Marina', 'Pesta networking → gossip lebih cepat (Fase 3)'],
+    perks: ['Buka lokasi: Marina', 'Perk: jeda ngobrol −3 jam'],
     locId: 'marina'
   },
   {
@@ -139,7 +139,7 @@ export const ASSET_DEFS: AssetDef[] = [
     price: 48_000_000,
     upkeep: 21_000,
     desc: 'Terbang kemanapun kapanpun. Time is money.',
-    perks: ['Buka lokasi: Bandara', 'Akses cepat event world (Fase 5)'],
+    perks: ['Buka lokasi: Bandara', 'Perk: rumor 2× · fee −5%'],
     locId: 'airport'
   },
 
@@ -153,7 +153,7 @@ export const ASSET_DEFS: AssetDef[] = [
     price: 65_000,
     upkeep: 12,
     desc: 'Rolex sekelas. Diam-diam nunjukin status.',
-    perks: ['Buka lokasi: Rumah'],
+    perks: ['Buka lokasi: Rumah', 'Perk: jeda ngobrol −1 jam'],
     locId: 'home'
   },
   {
