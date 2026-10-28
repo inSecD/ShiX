@@ -25,6 +25,7 @@ import {
 } from './sim/world';
 import { buyAsset, normalizeLifestyle, sellAsset } from './sim/lifestyle';
 import { LOCATION_BY_ID, isLocationUnlocked, locationHint, normalizeHub } from './sim/hub';
+import { chatWith, normalizeSocial } from './sim/social';
 import { clearState, loadState, saveState } from './lib/persist';
 import type {
   AssetClass,
@@ -157,6 +158,8 @@ function normalizeSim(sim: SimState, startingCash: number): SimState {
   if (!sim.spotHoldings || typeof sim.spotHoldings !== 'object') sim.spotHoldings = {};
   sim.lifestyle = normalizeLifestyle(sim.lifestyle, sim.ticks);
   sim.hub = normalizeHub(sim.hub);
+  sim.social = normalizeSocial(sim.social);
+  sim.pendingEvent = null;
   for (const [id, holding] of Object.entries(sim.spotHoldings)) {
     if (
       !sim.instruments[id] ||
@@ -313,6 +316,8 @@ interface Store {
   lifestyleSell: (assetId: string) => void;
 
   hubGoto: (locId: string) => void;
+
+  npcChat: (botId: string) => void;
 
   reset: (seed?: number, cash?: number) => void;
   save: () => Promise<void>;
@@ -736,6 +741,13 @@ export const useStore = create<Store>((set, get) => ({
     hub.locId = locId;
     if (!hub.visited.includes(locId)) hub.visited.push(locId);
     notify(`${def.icon} ${def.name} · ${def.mood}`, 'ok');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  npcChat: (botId) => {
+    const { sim, notify } = get();
+    const res = chatWith(sim, botId);
+    notify(res.msg, res.ok ? 'ok' : 'err');
     set((s) => ({ v: s.v + 1 }));
   },
 

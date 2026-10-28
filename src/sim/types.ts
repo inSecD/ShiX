@@ -122,6 +122,42 @@ export interface GameEvent {
   cls: AssetClass | null;
 }
 
+/** event yang udah digenerate tapi BELUM diterapkan (dibocorkan sebagai rumor dulu) */
+export interface PendingEvent {
+  ev: GameEvent;
+  tplId: string;
+  impact: number;
+  bps: number;
+  ccyCode: string | null;
+  sector: string | null;
+  instId: string | null;
+  macro: Partial<MacroState>;
+}
+
+export interface RumorState {
+  botId: string;
+  text: string;
+  tier: number;
+  evId: string | null;
+  at: number;
+}
+
+export interface ConvoState {
+  botId: string;
+  greeting: string;
+  rumor: string | null;
+  gain: number;
+  at: number;
+}
+
+export interface SocialState {
+  friendship: Record<string, number>;
+  lastChat: Record<string, number>;
+  met: string[];
+  rumor: RumorState | null;
+  lastConvo: ConvoState | null;
+}
+
 export interface LaunchToken {
   id: string;
   name: string;
@@ -266,4 +302,6 @@ export interface SimState {
   world: WorldState;
   lifestyle: LifestyleState;
   hub: HubState;
+  social: SocialState;
+  pendingEvent: PendingEvent | null;
 }

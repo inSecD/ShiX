@@ -1,6 +1,6 @@
 import { RNG } from './rng';
 import { buildUniverse, CURRENCY_MAP } from './universe';
-import { clamp, rollEvent } from './events';
+import { clamp, applyEvent, generateEvent } from './events';
 import {
   applyFill,
   closePosition,
@@ -13,6 +13,7 @@ import { createBots, tickBots } from './bots';
 import { createWorld, worldAssetsValue, worldTick } from './world';
 import { createLifestyle, lifestyleAssetsValue, lifestyleTick } from './lifestyle';
 import { createHub } from './hub';
+import { createSocial } from './social';
 import type { AssetClass, Candle, Fill, Instrument, Position, Settings, SimState } from './types';
 
 export const HOUR = 3_600_000;
@@ -184,7 +185,9 @@ export function createSim(settings: Settings): SimState {
     progress: {},
     world: createWorld(settings.seed),
     lifestyle: createLifestyle(),
-    hub: createHub()
+    hub: createHub(),
+    social: createSocial(),
+    pendingEvent: null
   };
 
   for (let i = 0; i < 72; i++) tick(state, settings, true);
@@ -206,10 +209,16 @@ export function tick(state: SimState, settings: Settings, warmup = false): void 
   updateMacro(state, rng);
 
   if (state.simTime >= state.nextEventAt) {
-    rollEvent(state, rng);
+    if (state.pendingEvent) {
+      applyEvent(state, state.pendingEvent);
+      state.pendingEvent = null;
+      if (state.social.rumor) state.social.rumor = null; // rumor terkonfirmasi → jadi berita
+    }
     const evMult = settings.difficulty === 'easy' ? 1.7 : settings.difficulty === 'brutal' ? 0.55 : 1;
     state.nextEventAt = state.simTime + rng.int(1, 12) * HOUR * evMult;
   }
+  // selalu siapkan event berikutnya biar bisa dibocorkan sebagai rumor (Fase 3)
+  if (!state.pendingEvent) state.pendingEvent = generateEvent(state, rng);
 
   for (const id of state.order) {
     const inst = state.instruments[id];

@@ -1,6 +1,6 @@
 import type { RNG } from './rng';
 import { CURRENCIES } from './names';
-import type { AssetClass, GameEvent, MacroState, Severity, SimState } from './types';
+import type { AssetClass, GameEvent, MacroState, PendingEvent, Severity, SimState } from './types';
 
 type Scope = 'macro' | 'inst' | 'sector' | 'class' | 'global';
 
@@ -513,6 +513,16 @@ function pickInstrument(state: SimState, cls: AssetClass[]): string | null {
 }
 
 export function rollEvent(state: SimState, rng: RNG): GameEvent | null {
+  const pending = generateEvent(state, rng);
+  if (!pending) return null;
+  applyEvent(state, pending);
+  return pending.ev;
+}
+
+const TPL_BY_ID: Record<string, Template> = Object.fromEntries(T.map((t) => [t.id, t]));
+
+/** pilih + isi event berikutnya TANPA efek samping — dipakai buat dibocorkan sebagai rumor dulu (Fase 3) */
+export function generateEvent(state: SimState, rng: RNG): PendingEvent | null {
   const pool = T.filter((t) => {
     if (t.scope === 'inst') return t.cls.some((c) => state.order.some((id) => state.instruments[id].cls === c));
     if (t.scope === 'sector') return state.order.some((id) => state.instruments[id].cls === 'stock');
@@ -523,7 +533,6 @@ export function rollEvent(state: SimState, rng: RNG): GameEvent | null {
   const weights = pool.map((t) => t.weight);
   const tpl = pool[rng.weightedIndex(weights)];
 
-  const severity = tpl.severity;
   const impact = tpl.impact * rng.float(0.6, 1.5) * 0.28;
   const bps = rng.pick([25, 50, 75, 100]);
   const ccy = rng.pick(CURRENCIES.filter((c) => c.code !== 'USD'));
@@ -536,41 +545,61 @@ export function rollEvent(state: SimState, rng: RNG): GameEvent | null {
   const instName = inst ? inst.name : 'Aset';
   const instTag = inst ? inst.tag : 'Pasar';
 
-  const title = tpl.title
-    .replace('{bps}', String(bps))
-    .replace('{hot}', rng.pick(['lebih tinggi', 'jauh lebih tinggi']))
-    .replace('{inst}', instName)
-    .replace('{sector}', sector)
-    .replace('{ccy}', ccy.code)
-    .replace('{tag}', instTag);
+  const fill = (s: string) =>
+    s
+      .replace('{bps}', String(bps))
+      .replace('{hot}', rng.pick(['lebih tinggi', 'jauh lebih tinggi']))
+      .replace('{inst}', instName)
+      .replace('{sector}', sector)
+      .replace('{ccy}', ccy.code)
+      .replace('{tag}', instTag);
 
-  const body = tpl.body
-    .replace('{bps}', String(bps))
-    .replace('{hot}', rng.pick(['lebih tinggi', 'jauh lebih tinggi']))
-    .replace('{inst}', instName)
-    .replace('{sector}', sector)
-    .replace('{ccy}', ccy.code)
-    .replace('{tag}', instTag);
+  evCounter += 1;
+  const ev: GameEvent = {
+    id: `ev${state.ticks}-${evCounter}`,
+    t: state.simTime,
+    title: fill(tpl.title),
+    body: fill(tpl.body),
+    severity: tpl.severity,
+    tags: [...tpl.tags],
+    impact,
+    instId,
+    sector: tpl.scope === 'sector' ? sector : null,
+    cls: tpl.scope === 'inst' ? (inst?.cls ?? null) : tpl.cls[0] ?? null
+  };
+
+  return { ev, tplId: tpl.id, impact, bps, ccyCode: ccy.code, sector, instId, macro: tpl.macro };
+}
+
+/** terapkan efek samping event + masukkin ke feed berita */
+export function applyEvent(state: SimState, pending: PendingEvent): void {
+  const tpl = TPL_BY_ID[pending.tplId];
+  const inst = pending.instId ? state.instruments[pending.instId] : null;
+  const sector = pending.sector;
+  const ccyCode = pending.ccyCode;
+  const impact = pending.impact;
+  const m = pending.macro;
+
+  pending.ev.t = state.simTime;
 
   // apply macro effects
-  if (tpl.macro.rate) state.macro.rate = Math.max(0.25, state.macro.rate + tpl.macro.rate);
-  if (tpl.macro.risk) state.macro.risk = clamp(state.macro.risk + tpl.macro.risk, -1.5, 1.5);
-  if (tpl.macro.inflation) state.macro.inflation = clamp(state.macro.inflation + tpl.macro.inflation, -1.2, 1.6);
-  if (tpl.macro.usd) state.macro.usd = clamp(state.macro.usd + tpl.macro.usd, -1.5, 1.5);
-  if (tpl.macro.liquidity) state.macro.liquidity = clamp(state.macro.liquidity + tpl.macro.liquidity, -1.5, 1.5);
+  if (m.rate) state.macro.rate = Math.max(0.25, state.macro.rate + m.rate);
+  if (m.risk) state.macro.risk = clamp(state.macro.risk + m.risk, -1.5, 1.5);
+  if (m.inflation) state.macro.inflation = clamp(state.macro.inflation + m.inflation, -1.2, 1.6);
+  if (m.usd) state.macro.usd = clamp(state.macro.usd + m.usd, -1.5, 1.5);
+  if (m.liquidity) state.macro.liquidity = clamp(state.macro.liquidity + m.liquidity, -1.5, 1.5);
 
-  if (tpl.id === 'cb_hawkish') {
+  if (!tpl) {
+    state.events.unshift(pending.ev);
+    if (state.events.length > 300) state.events.length = 300;
+    return;
+  }
+
+  if (tpl.id === 'cb_hawkish' || tpl.id === 'cb_dovish') {
     for (const id of state.order) {
       const i = state.instruments[id];
-      if (i.cls === 'forex' && i.pair && i.pair.includes(ccy.code)) {
-        i.pressure += impact * (i.pair[0] === ccy.code ? 1 : -1);
-      }
-    }
-  } else if (tpl.id === 'cb_dovish') {
-    for (const id of state.order) {
-      const i = state.instruments[id];
-      if (i.cls === 'forex' && i.pair && i.pair.includes(ccy.code)) {
-        i.pressure += impact * (i.pair[0] === ccy.code ? 1 : -1);
+      if (i.cls === 'forex' && i.pair && ccyCode && i.pair.includes(ccyCode)) {
+        i.pressure += impact * (i.pair[0] === ccyCode ? 1 : -1);
       }
     }
   } else if (tpl.scope === 'inst' && inst) {
@@ -596,22 +625,8 @@ export function rollEvent(state: SimState, rng: RNG): GameEvent | null {
     }
   }
 
-  evCounter += 1;
-  const ev: GameEvent = {
-    id: `ev${state.ticks}-${evCounter}`,
-    t: state.simTime,
-    title,
-    body,
-    severity,
-    tags: [...tpl.tags],
-    impact,
-    instId,
-    sector: tpl.scope === 'sector' ? sector : null,
-    cls: tpl.scope === 'inst' ? (inst?.cls ?? null) : tpl.cls[0] ?? null
-  };
-  state.events.unshift(ev);
+  state.events.unshift(pending.ev);
   if (state.events.length > 300) state.events.length = 300;
-  return ev;
 }
 
 export function clamp(v: number, lo: number, hi: number): number {

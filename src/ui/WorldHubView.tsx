@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../store';
+import { STRATEGY_LABEL } from '../sim/bots';
+import { chatCooldownLeft, friendshipOf, npcsAtLocation } from '../sim/social';
 import {
   LOCATIONS,
   LOCATION_BY_ID,
@@ -52,6 +54,7 @@ interface MarkerHit {
 export function WorldHubView() {
   const sim = useStore((s) => s.sim);
   const hubGoto = useStore((s) => s.hubGoto);
+  const npcChat = useStore((s) => s.npcChat);
   const notify = useStore((s) => s.notify);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -62,6 +65,11 @@ export function WorldHubView() {
   const locId = sim.hub.locId;
   const visited = sim.hub.visited;
   const current = LOCATION_BY_ID[locId] ?? LOCATION_BY_ID['street'];
+  const npcs = npcsAtLocation(sim, locId);
+  const social = sim.social;
+  const convo = social.lastConvo;
+  const activeRumor = social.rumor;
+  const rumorBot = activeRumor ? sim.bots.find((b) => b.id === activeRumor.botId) : null;
 
   // ---- refs supaya loop rAF nggak perlu di-restart tiap render ----
   const widthRef = useRef(width);
@@ -395,6 +403,62 @@ export function WorldHubView() {
           <div className="hub-flavor">“{current.flavor}”</div>
         </div>
       </div>
+
+      {npcs.length > 0 && (
+        <div className="panel">
+          <div className="panel-head">
+            <span>Orang di sini</span>
+            <span className="badge">{npcs.length} orang</span>
+          </div>
+          <div className="panel-body hub-npcs">
+            {npcs.map((n) => {
+              const fr = friendshipOf(social, n.id);
+              const wait = chatCooldownLeft(sim, n.id);
+              return (
+                <div className="npc-row" key={n.id}>
+                  <span className="npc-ico">{n.emoji}</span>
+                  <div className="npc-copy">
+                    <div className="npc-name">
+                      <b>{n.name}</b>
+                      <span className="npc-strat">{STRATEGY_LABEL[n.strategy]}</span>
+                    </div>
+                    <div className="npc-friend">
+                      <div className="npc-friend-bar">
+                        <i style={{ width: `${Math.round(fr)}%` }} />
+                      </div>
+                      <span className="npc-friend-val">{Math.round(fr)}</span>
+                    </div>
+                  </div>
+                  <button className="short" disabled={wait > 0} onClick={() => npcChat(n.id)}>
+                    {wait > 0 ? `${wait}j` : 'Ngobrol'}
+                  </button>
+                </div>
+              );
+            })}
+            {convo && npcs.some((n) => n.id === convo.botId) ? (
+              <div className="npc-convo">
+                <div className="npc-convo-line">{convo.greeting}</div>
+                {convo.gain > 0 ? <div className="npc-convo-gain">+{convo.gain} pertemanan</div> : null}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      )}
+
+      {activeRumor ? (
+        <div className="panel">
+          <div className="panel-head">
+            <span>Rumor</span>
+            <span className="badge warn">Tier {activeRumor.tier}</span>
+          </div>
+          <div className="panel-body">
+            <div className="npc-rumor">🗣️ {activeRumor.text}</div>
+            <div className="tiny muted" style={{ marginTop: 4 }}>
+              Dari {rumorBot?.name ?? 'orang dalam'} · berlaku sampai kejadian berikutnya
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="panel">
         <div className="panel-head">

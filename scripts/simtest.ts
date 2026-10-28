@@ -22,6 +22,8 @@ import type { Settings, SimState } from '../src/sim/types';
 import { GRAD_MULTIPLE, buyToken, createToken } from '../src/sim/launchpad';
 import * as lifestyleMod from '../src/sim/lifestyle';
 import * as hubMod from '../src/sim/hub';
+import * as socialMod from '../src/sim/social';
+import { applyEvent, generateEvent } from '../src/sim/events';
 import { RNG } from '../src/sim/rng';
 
 const settings: Settings = {
@@ -473,5 +475,58 @@ function openLong(sim: SimState) {
     unlockedNow + '/' + LOCATIONS.length,
     '| normalize fixes: ok | hint:',
     hint
+  );
+}
+
+// ---------- Phase 3: NPC, friendship, rumor (event split generate/apply) ----------
+{
+  const sim = freshSim();
+  const rng = new RNG(7);
+  const { chatWith, friendshipOf, rumorTier, npcsAtLocation } = socialMod;
+
+  // createSim nyisain minimal satu pending event buat dibocorkan
+  if (!sim.pendingEvent) throw new Error('createSim should queue a pending event');
+
+  // generateEvent: murni, nggak push event & nggak ubah macro
+  const evBefore = sim.events.length;
+  const riskBefore = sim.macro.risk;
+  const pend = generateEvent(sim, rng);
+  if (!pend) throw new Error('generateEvent returned null');
+  if (sim.events.length !== evBefore) throw new Error('generateEvent must not push events');
+  if (sim.macro.risk !== riskBefore) throw new Error('generateEvent must not change macro');
+
+  // applyEvent: efek samping + masuk feed, objek event sama
+  const evMid = sim.events.length;
+  applyEvent(sim, pend);
+  if (sim.events.length !== evMid + 1) throw new Error('applyEvent should push one event');
+  if (sim.events[0].id !== pend.ev.id) throw new Error('applied event should be the same event');
+
+  // Aria ada di Jalan Kota (lokasi gratis)
+  if (!npcsAtLocation(sim, 'street').some((b) => b.id === 'bot_0')) throw new Error('Aria should be at street');
+
+  // ngobrol: friendship naik, lalu kena cooldown
+  const before = friendshipOf(sim.social, 'bot_0');
+  const r1 = chatWith(sim, 'bot_0');
+  if (!r1.ok) throw new Error('chat should succeed: ' + r1.msg);
+  if (friendshipOf(sim.social, 'bot_0') <= before) throw new Error('friendship should increase');
+  if (chatWith(sim, 'bot_0').ok) throw new Error('immediate re-chat should be on cooldown');
+
+  // paksa rumor: friendship tier-3 + Math.random deterministik
+  sim.social.friendship['bot_0'] = 90;
+  sim.social.lastChat['bot_0'] = sim.ticks - 999;
+  const origRandom = Math.random;
+  Math.random = () => 0;
+  const r3 = chatWith(sim, 'bot_0');
+  Math.random = origRandom;
+  if (!r3.rumor) throw new Error('tier-3 chat should leak a rumor');
+  if (!sim.social.rumor || sim.social.rumor.tier !== 3) throw new Error('rumor stored with wrong tier');
+
+  // ambang tier rumor
+  if (rumorTier(0) !== 0 || rumorTier(25) !== 1 || rumorTier(55) !== 2 || rumorTier(85) !== 3)
+    throw new Error('rumorTier thresholds wrong');
+
+  console.log(
+    'event split: ok | apply pushes:', pend.ev.id,
+    '| npc chat: friendship + cooldown ok | rumor tier3:', (r3.rumor ?? '').slice(0, 48)
   );
 }
