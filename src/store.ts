@@ -23,6 +23,7 @@ import {
   shipCommodity,
   trimWorld
 } from './sim/world';
+import { buyAsset, normalizeLifestyle, sellAsset } from './sim/lifestyle';
 import { clearState, loadState, saveState } from './lib/persist';
 import type {
   AssetClass,
@@ -43,6 +44,7 @@ export type Tab =
   | 'news'
   | 'launchpad'
   | 'rank'
+  | 'lifestyle'
   | 'settings'
   | 'modes'
   | 'more';
@@ -151,6 +153,7 @@ function normalizeSim(sim: SimState, startingCash: number): SimState {
     }
   }
   if (!sim.spotHoldings || typeof sim.spotHoldings !== 'object') sim.spotHoldings = {};
+  sim.lifestyle = normalizeLifestyle(sim.lifestyle, sim.ticks);
   for (const [id, holding] of Object.entries(sim.spotHoldings)) {
     if (
       !sim.instruments[id] ||
@@ -303,6 +306,9 @@ interface Store {
   buyTok: (tokenId: string, usd: number) => void;
   sellTok: (tokenId: string, units: number) => void;
 
+  lifestyleBuy: (assetId: string) => void;
+  lifestyleSell: (assetId: string) => void;
+
   reset: (seed?: number, cash?: number) => void;
   save: () => Promise<void>;
   exportSave: () => void;
@@ -340,6 +346,7 @@ export const useStore = create<Store>((set, get) => ({
       'news',
       'launchpad',
       'rank',
+      'lifestyle',
       'settings',
       'modes',
       'more'
@@ -693,6 +700,20 @@ export const useStore = create<Store>((set, get) => ({
     const { sim, notify } = get();
     const res = sellToken(sim, tokenId, units);
     notify(res.ok ? `Jual seharga $${res.proceeds.toFixed(2)}` : res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  lifestyleBuy: (assetId) => {
+    const { sim, notify } = get();
+    const res = buyAsset(sim, assetId);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  lifestyleSell: (assetId) => {
+    const { sim, notify } = get();
+    const res = sellAsset(sim, assetId);
+    notify(res.msg, res.ok ? 'ok' : 'err');
     set((s) => ({ v: s.v + 1 }));
   },
 

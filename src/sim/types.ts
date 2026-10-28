@@ -1,4 +1,5 @@
 import type { WorldState } from './world';
+import type { LifestyleState } from './lifestyle';
 
 export type AssetClass =
   | 'crypto'
@@ -262,4 +263,5 @@ export interface SimState {
   notices: string[];
   progress: Record<string, boolean>;
   world: WorldState;
+  lifestyle: LifestyleState;
 }

@@ -11,6 +11,7 @@ import {
 import { spawnAiToken, tickTokens } from './launchpad';
 import { createBots, tickBots } from './bots';
 import { createWorld, worldAssetsValue, worldTick } from './world';
+import { createLifestyle, lifestyleAssetsValue, lifestyleTick } from './lifestyle';
 import type { AssetClass, Candle, Fill, Instrument, Position, Settings, SimState } from './types';
 
 export const HOUR = 3_600_000;
@@ -180,7 +181,8 @@ export function createSim(settings: Settings): SimState {
     challenge: null,
     notices: [],
     progress: {},
-    world: createWorld(settings.seed)
+    world: createWorld(settings.seed),
+    lifestyle: createLifestyle()
   };
 
   for (let i = 0; i < 72; i++) tick(state, settings, true);
@@ -214,6 +216,7 @@ export function tick(state: SimState, settings: Settings, warmup = false): void 
   }
 
   const worldNews = worldTick(state.world, state);
+  lifestyleTick(state);
   if (!warmup) {
     for (const ev of worldNews.slice(0, 2)) {
       state.events.unshift({
@@ -652,7 +655,8 @@ export function equity(state: SimState): number {
     state.locked +
     unrealizedPnl(state) +
     spotValue(state) +
-    worldAssetsValue(state.world)
+    worldAssetsValue(state.world) +
+    lifestyleAssetsValue(state.lifestyle)
   );
 }
 

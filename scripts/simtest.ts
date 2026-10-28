@@ -20,6 +20,7 @@ import {
 } from '../src/sim/world';
 import type { Settings, SimState } from '../src/sim/types';
 import { GRAD_MULTIPLE, buyToken, createToken } from '../src/sim/launchpad';
+import * as lifestyleMod from '../src/sim/lifestyle';
 import { RNG } from '../src/sim/rng';
 
 const settings: Settings = {
@@ -362,5 +363,66 @@ function openLong(sim: SimState) {
     spot.avgCost.toPrecision(6),
     '| inst:',
     token.instId
+  );
+}
+
+// ---------- Phase 1: lifestyle assets (beli, upkeep harian, jual 70%, net worth) ----------
+{
+  const sim = freshSim();
+  const { buyAsset, sellAsset, lifestyleAssetsValue, dailyUpkeep, SELL_RATE } = lifestyleMod;
+
+  // beli dua aset muat di modal $100k: motor ($9k) + jam ($65k)
+  const b1 = buyAsset(sim, 'motor');
+  if (!b1.ok) throw new Error('buy motor failed: ' + b1.msg);
+  const b2 = buyAsset(sim, 'watch');
+  if (!b2.ok) throw new Error('buy watch failed: ' + b2.msg);
+
+  // dobel beli harus ditolak
+  if (buyAsset(sim, 'motor').ok) throw new Error('duplicate buy should fail');
+
+  // beli aset kemahalan harus ditolak (island $160k > cash sisa)
+  if (buyAsset(sim, 'island').ok) throw new Error('over-budget buy should fail');
+
+  const cashAfterBuy = sim.cash;
+  const ownedValue = lifestyleAssetsValue(sim.lifestyle);
+  if (Math.abs(ownedValue - (9000 + 65000)) > 1e-6) throw new Error('asset value mismatch: ' + ownedValue);
+  // net worth harus ikut naik sebesar nilai aset
+  if (Math.abs(equity(sim) - (cashAfterBuy + ownedValue)) > ownedValue * 1e-6 + 1)
+    throw new Error('equity should include lifestyle asset value');
+
+  // upkeep harian = motor(8) + jam(12) = $20
+  const upkeep = dailyUpkeep(sim.lifestyle);
+  if (Math.abs(upkeep - 20) > 1e-6) throw new Error('daily upkeep mismatch: ' + upkeep);
+
+  // tick 24x (1 hari) → upkeep didebet sekali
+  const ticksBefore = sim.ticks;
+  for (let i = 0; i < 24; i++) tick(sim, settings);
+  const cashAfterDay = sim.cash;
+  if (Math.abs(cashAfterDay - (cashAfterBuy - upkeep)) > 1e-6)
+    throw new Error(`upkeep not debited after a day: ${cashAfterBuy} -> ${cashAfterDay} (want -${upkeep})`);
+  if (sim.lifestyle.stats.upkeepPaid < upkeep) throw new Error('upkeepPaid stat not tracked');
+
+  // tick 5x lagi (belum 24 penuh) → TIDAK boleh didebet lagi
+  for (let i = 0; i < 5; i++) tick(sim, settings);
+  if (Math.abs(sim.cash - cashAfterDay) > 1e-6) throw new Error('upkeep debited more than once per day');
+
+  // jual jam → dapat 70%
+  const watchProceeds = Math.round(65000 * SELL_RATE);
+  const cashBeforeSell = sim.cash;
+  const s1 = sellAsset(sim, 'watch');
+  if (!s1.ok) throw new Error('sell watch failed: ' + s1.msg);
+  if (sim.cash - cashBeforeSell !== watchProceeds) throw new Error('sell proceeds mismatch');
+  if (sim.lifestyle.owned.includes('watch')) throw new Error('watch should be sold');
+  if (sellAsset(sim, 'watch').ok) throw new Error('double sell should fail');
+
+  console.log(
+    'lifestyle buy: ok | owned value:',
+    ownedValue.toFixed(0),
+    '| upkeep/day:',
+    upkeep.toFixed(0),
+    '| upkeep debited: ok | sell@' + Math.round(SELL_RATE * 100) + '%:',
+    watchProceeds,
+    '| cash:',
+    sim.cash.toFixed(0)
   );
 }
