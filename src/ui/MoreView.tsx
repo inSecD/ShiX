@@ -52,7 +52,7 @@ export function MoreView() {
           <div>• Di Market, tap instrumen → chart dan trade card langsung terbuka.</div>
           <div>• Di Dunia, beli murah di satu negara lalu kirim untuk jual mahal di negara lain.</div>
           <div>• Pasang TP/SL/trailing dari trade card; TP + SL otomatis OCO.</div>
-          <div>• Tantangan harian pakai seed tetap; target +10% dalam 7 hari simulasi.</div>
+          <div>• Tantangan harian pakai seed tetap; target +10% dalam 7 hari.</div>
           <div className="tiny muted" style={{ marginTop: 6 }}>
             ShiX Terminal · data tersimpan lokal di perangkat ini.
           </div>

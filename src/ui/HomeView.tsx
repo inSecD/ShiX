@@ -88,7 +88,7 @@ export function HomeView() {
       <section className="home-hero">
         <div className="home-hero-row">
           <div>
-            <div className="home-eyebrow">Net worth · akun simulasi</div>
+            <div className="home-eyebrow">Net worth · akun lo</div>
             <div className="home-networth" data-tut="networth">
               {fmtUsd(eq)}
             </div>
@@ -194,7 +194,7 @@ export function HomeView() {
             ) : (
               <>
                 <p className="tiny muted" style={{ margin: 0 }}>
-                  Modal {fmtUsd(settings.startingCash, true)}, target +10% dalam 7 hari simulasi. Seed sama untuk
+                  Modal {fmtUsd(settings.startingCash, true)}, target +10% dalam 7 hari. Seed sama untuk
                   semua percobaan hari ini.
                 </p>
                 <button className="primary" style={{ width: '100%', marginTop: 10 }} onClick={() => setTab('settings')}>

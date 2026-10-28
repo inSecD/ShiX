@@ -33,7 +33,7 @@ export default function App() {
     void boot();
   }, [boot]);
 
-  // simulation loop
+  // market loop
   useEffect(() => {
     if (!booted) return;
     const id = window.setInterval(() => {
