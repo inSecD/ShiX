@@ -221,7 +221,7 @@ button:disabled {
   bottom: 0;
   z-index: 40;
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   background: rgba(10, 13, 21, 0.96);
   backdrop-filter: blur(14px);
   border-top: 1px solid var(--line);
@@ -1054,7 +1054,7 @@ input[type='range']::-webkit-slider-thumb {
 }
 
 .bottom-nav {
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
 }
 
 .nav-btn {
