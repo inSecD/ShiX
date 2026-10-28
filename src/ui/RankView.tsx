@@ -45,6 +45,12 @@ export function RankView() {
   ].sort((a, b) => b.equity - a.equity);
 
   const myRank = rows.findIndex((r) => r.me) + 1;
+  // leaderboard 300 orang → tampilin top 30 + baris lo kalau di luar top
+  const VISIBLE = 30;
+  const rankOf = new Map(rows.map((r, i) => [r.key, i + 1]));
+  const meIdx = myRank - 1;
+  let list = rows.slice(0, VISIBLE);
+  if (meIdx >= VISIBLE) list = [...list, rows[meIdx]];
   const best = rows[0];
   const ch = sim.challenge;
   const chPct = ch && ch.startEquity > 0 ? (eq / ch.startEquity - 1) * 100 : 0;
@@ -128,13 +134,13 @@ export function RankView() {
           <span className="badge">{rows.length} trader</span>
         </div>
         <div style={{ padding: 0 }}>
-          {rows.map((r, i) => {
+          {list.map((r) => {
             const open = openId === r.key;
-            const pos = i + 1;
+            const pos = rankOf.get(r.key) ?? 0;
             return (
               <div key={r.key} className={`rank-wrap ${r.me ? 'me' : ''}`}>
                 <button className="rank-row" onClick={() => setOpenId(open ? null : r.key)}>
-                  <span className={`rank-no ${pos <= 3 ? 'top' : ''}`}>{MEDALS[i] ?? pos}</span>
+                  <span className={`rank-no ${pos <= 3 ? 'top' : ''}`}>{MEDALS[pos - 1] ?? pos}</span>
                   <span className="rank-who">
                     <span style={{ fontWeight: 700, fontSize: 12.5 }}>
                       {r.emoji} {r.name}
@@ -204,6 +210,12 @@ export function RankView() {
               </div>
             );
           })}
+          {list.length < rows.length && (
+            <div className="tiny muted" style={{ padding: '9px 12px', textAlign: 'center' }}>
+              Top {VISIBLE} dari {rows.length} trader ditampilin
+              {meIdx >= VISIBLE ? ` · lo di #${myRank}` : ''} — sisanya di balik layar.
+            </div>
+          )}
         </div>
       </div>
     </div>

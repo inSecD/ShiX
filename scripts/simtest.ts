@@ -30,6 +30,8 @@ import * as perksMod from '../src/sim/perks';
 import * as profileMod from '../src/sim/profile';
 import { parseMention, mentionsHeldCoin } from '../src/sim/mentions';
 import { applyEvent, generateEvent } from '../src/sim/events';
+import { createBots } from '../src/sim/bots';
+import { NPC_COUNT, TOTAL_BOTS, growBots } from '../src/sim/people';
 import { RNG } from '../src/sim/rng';
 
 const settings: Settings = {
@@ -826,5 +828,93 @@ function openLong(sim: SimState) {
     '| post likes:', post.likes, '| followers:', sim.profile.followers,
     '| reaction:', post2.reactions[0].text.slice(0, 40),
     '| hype bump: ok | follow: ok'
+  );
+}
+
+// ---------- Phase 7: populasi 300 orang + timeline CT ala X ----------
+{
+  // ---- populasi kota ----
+  const bots = createBots(settings.startingCash);
+  if (bots.length !== TOTAL_BOTS) throw new Error(`should create ${TOTAL_BOTS} bots, got ${bots.length}`);
+  if (bots[0].name !== 'Aria' || bots[9].name !== 'Sinta') throw new Error('NPC roster should come first');
+  const handles = new Set(bots.map((b) => b.handle));
+  if (handles.size !== bots.length) throw new Error('every handle must be unique');
+  if (bots.some((b) => !b.handle || !Number.isFinite(b.followers) || b.followers <= 0))
+    throw new Error('every bot needs handle + followers');
+  if (bots[NPC_COUNT].id !== `bot_${NPC_COUNT}`) throw new Error('crowd ids should continue after NPCs');
+  if (bots.some((b, i) => i >= NPC_COUNT && b.equity !== settings.startingCash))
+    throw new Error('crowd should start with starting cash');
+
+  // save lama (cuma NPC) → di-grow sampe penuh, data lama dipertahankan
+  const old = createBots(50000).slice(0, NPC_COUNT);
+  old[0].cash = 12345;
+  old[0].handle = ''; // save tanpa handle (versi sebelum Phase 7)
+  const grown = growBots(old, 100000);
+  if (grown.length !== TOTAL_BOTS) throw new Error('growBots should top up to total population');
+  if (grown[0].cash !== 12345) throw new Error('growBots must preserve existing bot state');
+  if (!grown[0].handle) throw new Error('growBots should heal missing handle');
+  if (!grown[0].followers || grown[0].followers <= 0) throw new Error('growBots should heal missing followers');
+
+  // ---- feed: engagement, media, obrolan kerumun ----
+  const sim = freshSim();
+  const rng = new RNG(777);
+  for (let i = 0; i < 600; i++) {
+    sim.ticks += 1;
+    feedMod.feedTick(sim, rng);
+  }
+  const posts = sim.feed.posts;
+  if (posts.length < 5) throw new Error('feed should be busy with 300 people, got ' + posts.length);
+  for (const p of posts) {
+    if (!p.handle) throw new Error('post missing handle: ' + p.id);
+    if (!Number.isFinite(p.likes) || p.likes < 1) throw new Error('post should carry engagement: ' + p.id);
+    if (!Number.isFinite(p.replies) || p.replies < 0) throw new Error('post replies invalid');
+  }
+  if (!posts.some((p) => p.kind === 'chat')) throw new Error('crowd should post casual chatter');
+  if (!posts.some((p) => p.media !== null)) throw new Error('some posts should carry media');
+
+  // ---- like / repost ala X ----
+  const target = posts[0];
+  const l0 = target.likes;
+  feedMod.toggleLike(sim, target.id);
+  if (!target.liked || target.likes !== l0 + 1) throw new Error('like should increment');
+  feedMod.toggleLike(sim, target.id);
+  if (target.liked || target.likes !== l0) throw new Error('unlike should restore');
+  const r0 = target.reposts;
+  feedMod.toggleRepost(sim, target.id);
+  if (!target.reposted || target.reposts !== r0 + 1) throw new Error('repost should increment');
+  feedMod.toggleRepost(sim, target.id);
+  if (target.reposted || target.reposts !== r0) throw new Error('undo repost should restore');
+
+  // ---- post pemain: mention → auto nempel chart; media eksplisit dihormati ----
+  const sim2 = freshSim();
+  const res1 = profileMod.publishPost(sim2, 'have fun on weekend!');
+  if (!res1.ok) throw new Error('publish failed: ' + res1.msg);
+  const p1 = sim2.feed.posts[0];
+  if (p1.media?.kind !== 'chart' || p1.media.instId !== 'WKND')
+    throw new Error('mention post should auto-attach WKND chart, got ' + JSON.stringify(p1.media));
+  if (!p1.handle || p1.handle !== 'kamu') throw new Error('player post handle should be kamu');
+
+  sim2.ticks += 99;
+  const res2 = profileMod.publishPost(sim2, 'sore hari enaknya ngopi', { kind: 'art', seed: 'x', emoji: '🌆' });
+  if (!res2.ok) throw new Error('publish 2 failed: ' + res2.msg);
+  const p2 = sim2.feed.posts[0];
+  if (p2.media?.kind !== 'art' || p2.media.emoji !== '🌆')
+    throw new Error('explicit art media should be kept');
+
+  // ---- normalize: post lama (sebelum Phase 7) → field baru di-heal ----
+  const norm = feedMod.normalizeFeed({
+    posts: [{ id: 'a', t: 1, kind: 'mover', authorId: 'bot_0', name: 'Aria', emoji: '🤖', text: 'ok', tag: null }],
+    seq: 1,
+    lastByKind: {},
+    lastEventId: null
+  });
+  const np = norm.posts[0];
+  if (np.handle !== 'ct' || np.media !== null || np.liked !== false || np.reposts !== 0 || np.replies !== 0 || np.replyTo !== null)
+    throw new Error('normalizeFeed should heal old posts with new social fields');
+
+  console.log(
+    'population:', bots.length, '| NPC:', NPC_COUNT, '| unique handles: ok',
+    '| feed posts:', posts.length, '| kinds:', [...new Set(posts.map((p) => p.kind))].join(','),
+    '| media: ok | like/repost: ok | auto-chart WKND: ok | normalize: ok'
   );
 }

@@ -1,5 +1,6 @@
-import type { FeedPost, ProfileState, SimState } from './types';
+import type { FeedPost, PostMedia, ProfileState, SimState } from './types';
 import { parseMention } from './mentions';
+import { MAX_POSTS } from './feed';
 import { clamp } from './events';
 
 /** jeda minimal (tick) antar post pemain — 1 post / 3 jam */
@@ -121,7 +122,7 @@ export interface PublishResult {
   mentionTag?: string | null;
 }
 
-export function publishPost(state: SimState, rawText: string): PublishResult {
+export function publishPost(state: SimState, rawText: string, media?: PostMedia | null): PublishResult {
   const text = rawText.trim();
   if (!text) return { ok: false, msg: 'Post kosong' };
   if (text.length > 180) return { ok: false, msg: 'Maksimal 180 karakter' };
@@ -185,6 +186,9 @@ export function publishPost(state: SimState, rawText: string): PublishResult {
   // catat ke feed
   const feed = state.feed;
   feed.seq += 1;
+  // media: dari composer; kalau nggak tapi ada koin yang ke-detek, auto-attach chart-nya
+  const postMedia: PostMedia | null =
+    media ?? (inst ? { kind: 'chart', instId: inst.id, seed: `me${feed.seq}` } : null);
   const post: FeedPost = {
     id: `fp${feed.seq}`,
     t: state.simTime,
@@ -192,14 +196,21 @@ export function publishPost(state: SimState, rawText: string): PublishResult {
     authorId: 'you',
     name: 'Kamu',
     emoji: '😎',
+    handle: 'kamu',
     text,
     tag: inst ? inst.id : null,
     mention: inst ? inst.id : null,
     likes,
-    reactions
+    reactions,
+    media: postMedia,
+    liked: false,
+    reposted: false,
+    reposts: Math.floor(Math.random() * 3),
+    replies: Math.floor(Math.random() * 5),
+    replyTo: null
   };
   feed.posts.unshift(post);
-  if (feed.posts.length > 60) feed.posts.length = 60;
+  if (feed.posts.length > MAX_POSTS) feed.posts.length = MAX_POSTS;
 
   const viaTxt = mention ? ` · sistem nangkep $${inst!.id} (${mention.via})` : '';
   return {

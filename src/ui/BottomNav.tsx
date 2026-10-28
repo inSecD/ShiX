@@ -3,6 +3,7 @@ import { useStore, type Tab } from '../store';
 const TABS: { id: Tab; icon: string; label: string }[] = [
   { id: 'home', icon: '🏠', label: 'Home' },
   { id: 'market', icon: '📊', label: 'Market' },
+  { id: 'social', icon: '🐦', label: 'CT' },
   { id: 'world', icon: '🌍', label: 'World' },
   { id: 'portfolio', icon: '💼', label: 'Porto' },
   { id: 'hub', icon: '🚶', label: 'Jalan' },

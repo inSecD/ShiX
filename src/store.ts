@@ -14,6 +14,7 @@ import { claimMissionRewards } from './sim/missions';
 import { RNG, hashString, randomSeed } from './sim/rng';
 import { makeMemeName, makeShitName } from './sim/names';
 import { createBots } from './sim/bots';
+import { growBots } from './sim/people';
 import {
   blackTrade,
   buildFactory,
@@ -25,7 +26,7 @@ import {
 } from './sim/world';
 import { buyAsset, normalizeLifestyle, sellAsset } from './sim/lifestyle';
 import { buyBusiness, normalizeBusiness, upgradeBusiness } from './sim/business';
-import { feedFromYou, normalizeFeed } from './sim/feed';
+import { feedFromYou, normalizeFeed, toggleLike, toggleRepost } from './sim/feed';
 import { normalizeProfile, publishPost, toggleFollow } from './sim/profile';
 import { LOCATION_BY_ID, isLocationUnlocked, locationHint, normalizeHub } from './sim/hub';
 import { chatWith, normalizeSocial } from './sim/social';
@@ -36,6 +37,7 @@ import type {
   Order,
   OrderSide,
   OrderType,
+  PostMedia,
   Settings,
   SimState
 } from './sim/types';
@@ -51,6 +53,7 @@ export type Tab =
   | 'rank'
   | 'lifestyle'
   | 'hub'
+  | 'social'
   | 'settings'
   | 'modes'
   | 'more';
@@ -143,6 +146,7 @@ export function writeTut(state: TutState): void {
 
 function normalizeSim(sim: SimState, startingCash: number): SimState {
   if (!Array.isArray(sim.bots) || sim.bots.length === 0) sim.bots = createBots(startingCash);
+  else sim.bots = growBots(sim.bots, startingCash); // save lama → tambah kerumun sampe 300 orang
   if (sim.challenge === undefined) sim.challenge = null;
   if (sim.challenge) {
     if (sim.challenge.scenarioId === undefined) sim.challenge.scenarioId = null;
@@ -165,6 +169,15 @@ function normalizeSim(sim: SimState, startingCash: number): SimState {
   sim.social = normalizeSocial(sim.social);
   sim.feed = normalizeFeed(sim.feed);
   sim.profile = normalizeProfile(sim.profile);
+  // post lama (sebelum Phase 7) → handle author di-backfill dari bot-nya
+  {
+    const botHandle = new Map(sim.bots.map((b) => [b.id, b.handle]));
+    for (const p of sim.feed.posts) {
+      if (p.authorId !== 'you' && (!p.handle || p.handle === 'ct')) {
+        p.handle = botHandle.get(p.authorId) ?? 'ct';
+      }
+    }
+  }
   sim.pendingEvent = null;
   for (const [id, holding] of Object.entries(sim.spotHoldings)) {
     if (
@@ -324,8 +337,10 @@ interface Store {
   businessBuy: (businessId: string) => void;
   businessUpgrade: (businessId: string) => void;
 
-  publishPost: (text: string) => void;
+  publishPost: (text: string, media?: PostMedia | null) => void;
   toggleFollow: (botId: string) => void;
+  likePost: (postId: string) => void;
+  repostPost: (postId: string) => void;
 
   hubGoto: (locId: string) => void;
 
@@ -370,6 +385,7 @@ export const useStore = create<Store>((set, get) => ({
       'rank',
       'lifestyle',
       'hub',
+      'social',
       'settings',
       'modes',
       'more'
@@ -757,9 +773,9 @@ export const useStore = create<Store>((set, get) => ({
     set((s) => ({ v: s.v + 1 }));
   },
 
-  publishPost: (text) => {
+  publishPost: (text, media) => {
     const { sim, notify } = get();
-    const res = publishPost(sim, text);
+    const res = publishPost(sim, text, media);
     notify(res.msg, res.ok ? 'ok' : 'err');
     set((s) => ({ v: s.v + 1 }));
   },
@@ -768,6 +784,19 @@ export const useStore = create<Store>((set, get) => ({
     const { sim, notify } = get();
     const res = toggleFollow(sim, botId);
     notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  // like/repost ala X — diam-diem aja, nggak usah toast
+  likePost: (postId) => {
+    const { sim } = get();
+    toggleLike(sim, postId);
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  repostPost: (postId) => {
+    const { sim } = get();
+    toggleRepost(sim, postId);
     set((s) => ({ v: s.v + 1 }));
   },
 

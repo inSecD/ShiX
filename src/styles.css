@@ -221,7 +221,7 @@ button:disabled {
   bottom: 0;
   z-index: 40;
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(7, 1fr);
   background: rgba(10, 13, 21, 0.96);
   backdrop-filter: blur(14px);
   border-top: 1px solid var(--line);
@@ -1054,7 +1054,7 @@ input[type='range']::-webkit-slider-thumb {
 }
 
 .bottom-nav {
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(7, 1fr);
 }
 
 .nav-btn {
@@ -3029,4 +3029,358 @@ input[type='range']::-webkit-slider-thumb {
 
 .ct-react-ico {
   flex: 0 0 auto;
+}
+
+/* ---------- Tab CT ala X (Fase 7) ---------- */
+.sx {
+  max-width: 620px;
+  margin: 0 auto;
+  padding-bottom: 12px;
+}
+
+.sx-top {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: rgba(10, 13, 21, 0.96);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+
+.sx-logo {
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--accent);
+  flex: 0 0 auto;
+}
+
+.sx-tabs {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+}
+
+.sx-tab {
+  flex: 1;
+  padding: 7px 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--dim);
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.sx-tab.on {
+  color: var(--text);
+  background: #131a29;
+}
+
+/* komposer */
+.sx-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.sx-me-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.sx-av {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  background: #131a29;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+}
+
+.sx-av.big {
+  width: 40px;
+  height: 40px;
+  font-size: 21px;
+}
+
+.sx-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  flex-wrap: wrap;
+}
+
+.sx-menu {
+  position: absolute;
+  bottom: 28px;
+  left: 0;
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  background: #10182a;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.sx-menu button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.sx-attach-prev {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  background: #10182a;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+}
+
+/* post */
+.sx-feed {
+  display: flex;
+  flex-direction: column;
+}
+
+.sx-post {
+  display: flex;
+  gap: 9px;
+  padding: 11px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.sx-post.me {
+  background: rgba(64, 120, 255, 0.05);
+}
+
+.sx-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.sx-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+}
+
+.sx-name {
+  color: var(--text, #c7d3e6);
+}
+
+.sx-verified {
+  display: inline-grid;
+  place-items: center;
+  width: 13px;
+  height: 13px;
+  font-size: 9px;
+  font-weight: 900;
+  color: #0a0e17;
+  background: var(--accent);
+  border-radius: 50%;
+}
+
+.sx-handle,
+.sx-dot,
+.sx-time {
+  color: var(--dim);
+  font-size: 11.5px;
+}
+
+.sx-meta .ct-follow {
+  margin-left: auto;
+}
+
+.sx-replyto {
+  font-size: 11px;
+  color: var(--dim);
+  margin-top: 3px;
+}
+
+.sx-text {
+  margin-top: 4px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text, #c7d3e6);
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.sx-replies {
+  margin-top: 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sx-reply {
+  display: flex;
+  gap: 6px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--dim);
+  background: #10182a;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 5px 8px;
+}
+
+.sx-reply b {
+  color: var(--text, #c7d3e6);
+  font-size: 11px;
+}
+
+.sx-actions {
+  display: flex;
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.sx-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: none;
+  color: var(--dim);
+  font-size: 11.5px;
+  font-family: var(--mono);
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.sx-act.on {
+  color: var(--accent);
+}
+
+.sx-act.like.on {
+  color: #ff5d73;
+}
+
+/* media */
+.sx-art {
+  position: relative;
+  margin-top: 8px;
+  height: 150px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.sx-art-emoji {
+  font-size: 46px;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.4));
+}
+
+.sx-art-mark {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.sx-chart {
+  margin-top: 8px;
+  height: 148px;
+  background: #0c111b;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.sx-chart canvas {
+  display: block;
+  width: 100%;
+  height: 148px;
+}
+
+/* explore */
+.sx-search {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.sx-sec {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin-top: 4px;
+}
+
+.sx-trend-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.sx-trend {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+  padding: 8px 10px;
+  background: #10182a;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: inherit;
+  cursor: pointer;
+}
+
+.sx-trend b {
+  font-size: 13px;
+  color: var(--accent);
+}
+
+.sx-person {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 0;
+  border-bottom: 1px dashed var(--line);
+}
+
+.sx-person:last-child {
+  border-bottom: none;
+}
+
+.sx-person-id {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.sx-empty {
+  padding: 26px 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--dim);
 }

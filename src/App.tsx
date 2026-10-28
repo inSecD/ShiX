@@ -10,6 +10,7 @@ import { PortfolioView } from './ui/PortfolioView';
 import { NewsView } from './ui/NewsView';
 import { LaunchpadView } from './ui/LaunchpadView';
 import { RankView } from './ui/RankView';
+import { SocialView } from './ui/SocialView';
 import { LifestyleView } from './ui/LifestyleView';
 import { WorldHubView } from './ui/WorldHubView';
 import { SettingsView } from './ui/SettingsView';
@@ -99,6 +100,7 @@ export default function App() {
         {tab === 'rank' && <RankView />}
         {tab === 'lifestyle' && <LifestyleView />}
         {tab === 'hub' && <WorldHubView />}
+        {tab === 'social' && <SocialView />}
         {tab === 'settings' && <SettingsView />}
         {tab === 'modes' && <ModesView />}
         {tab === 'more' && <MoreView />}

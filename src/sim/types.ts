@@ -163,17 +163,33 @@ export interface SocialState {
 export interface FeedPost {
   id: string;
   t: number;
-  kind: 'event' | 'mover' | 'hype' | 'rumor' | 'you';
+  kind: 'event' | 'mover' | 'hype' | 'rumor' | 'you' | 'chat';
   authorId: string;
   name: string;
   emoji: string;
+  /** handle ala X (@budi_trader) */
+  handle: string;
   text: string;
   tag: string | null;
   /** mention instrument hasil parser post pemain (instId) */
   mention: string | null;
   likes: number;
   reactions: FeedReaction[];
+  /** media post (chart koin / gambar prosedural) */
+  media: PostMedia | null;
+  /** udah di-like/di-repost pemain? */
+  liked: boolean;
+  reposted: boolean;
+  reposts: number;
+  replies: number;
+  /** post balasan siapa (id) — tampil "membalas @" */
+  replyTo: string | null;
 }
+
+/** media post: mini-chart koin atau gambar prosedural (deterministik dari seed) */
+export type PostMedia =
+  | { kind: 'chart'; instId: string; seed: string }
+  | { kind: 'art'; seed: string; emoji: string };
 
 /** balasan trader AI terhadap post (persona-flavored) */
 export interface FeedReaction {
@@ -275,6 +291,10 @@ export interface Bot {
   id: string;
   name: string;
   emoji: string;
+  /** handle ala X (@budi_trader) */
+  handle: string;
+  /** berapa orang yang ngikutin akun ini — buat tampilan sosmed */
+  followers: number;
   strategy: BotStrategy;
   startEquity: number;
   cash: number;

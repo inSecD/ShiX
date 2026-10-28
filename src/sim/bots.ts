@@ -1,5 +1,6 @@
 import type { Bot, BotStrategy, Instrument, SimState } from './types';
 import { RNG } from './rng';
+import { growBots, handleOfName } from './people';
 
 const PERIOD: Record<BotStrategy, number> = {
   momentum: 18,
@@ -28,17 +29,17 @@ export const STRATEGY_LABEL: Record<BotStrategy, string> = {
   panic: 'Panik'
 };
 
-const ROSTER: { name: string; emoji: string; strategy: BotStrategy }[] = [
-  { name: 'Aria', emoji: '🤖', strategy: 'momentum' },
-  { name: 'Kai', emoji: '🦊', strategy: 'contrarian' },
-  { name: 'DegenBoy', emoji: '🎲', strategy: 'degen' },
-  { name: 'Quant-9', emoji: '📐', strategy: 'quant' },
-  { name: 'Whale 0x7f', emoji: '🐋', strategy: 'whale' },
-  { name: 'Panik Pete', emoji: '😱', strategy: 'panic' },
-  { name: 'Nala', emoji: '🚀', strategy: 'momentum' },
-  { name: 'Viktor', emoji: '🧠', strategy: 'quant' },
-  { name: 'Moonkid', emoji: '🌙', strategy: 'degen' },
-  { name: 'Sinta', emoji: '🐢', strategy: 'contrarian' }
+const ROSTER: { name: string; emoji: string; strategy: BotStrategy; followers: number }[] = [
+  { name: 'Aria', emoji: '🤖', strategy: 'momentum', followers: 18400 },
+  { name: 'Kai', emoji: '🦊', strategy: 'contrarian', followers: 9200 },
+  { name: 'DegenBoy', emoji: '🎲', strategy: 'degen', followers: 45000 },
+  { name: 'Quant-9', emoji: '📐', strategy: 'quant', followers: 6100 },
+  { name: 'Whale 0x7f', emoji: '🐋', strategy: 'whale', followers: 120000 },
+  { name: 'Panik Pete', emoji: '😱', strategy: 'panic', followers: 3400 },
+  { name: 'Nala', emoji: '🚀', strategy: 'momentum', followers: 7700 },
+  { name: 'Viktor', emoji: '🧠', strategy: 'quant', followers: 15200 },
+  { name: 'Moonkid', emoji: '🌙', strategy: 'degen', followers: 22800 },
+  { name: 'Sinta', emoji: '🐢', strategy: 'contrarian', followers: 5400 }
 ];
 
 function costsFor(inst: Instrument): { fee: number; slip: number } {
@@ -52,10 +53,12 @@ function impactOf(inst: Instrument, notional: number): number {
 }
 
 export function createBots(startEquity: number): Bot[] {
-  return ROSTER.map((r, i) => ({
+  const npcs: Bot[] = ROSTER.map((r, i) => ({
     id: `bot_${i}`,
     name: r.name,
     emoji: r.emoji,
+    handle: handleOfName(r.name),
+    followers: r.followers,
     strategy: r.strategy,
     startEquity,
     cash: startEquity,
@@ -65,6 +68,8 @@ export function createBots(startEquity: number): Bot[] {
     lastTrade: 0,
     trades: 0
   }));
+  // sisanya kerumun kota (total 300 orang) — ikut trading & ngepost
+  return growBots(npcs, startEquity);
 }
 
 function marketOpen(inst: Instrument, t: number): boolean {
