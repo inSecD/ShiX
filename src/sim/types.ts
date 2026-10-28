@@ -1,5 +1,6 @@
 import type { WorldState } from './world';
 import type { LifestyleState } from './lifestyle';
+import type { HubState } from './hub';
 
 export type AssetClass =
   | 'crypto'
@@ -264,4 +265,5 @@ export interface SimState {
   progress: Record<string, boolean>;
   world: WorldState;
   lifestyle: LifestyleState;
+  hub: HubState;
 }

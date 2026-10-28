@@ -24,6 +24,7 @@ import {
   trimWorld
 } from './sim/world';
 import { buyAsset, normalizeLifestyle, sellAsset } from './sim/lifestyle';
+import { LOCATION_BY_ID, isLocationUnlocked, locationHint, normalizeHub } from './sim/hub';
 import { clearState, loadState, saveState } from './lib/persist';
 import type {
   AssetClass,
@@ -45,6 +46,7 @@ export type Tab =
   | 'launchpad'
   | 'rank'
   | 'lifestyle'
+  | 'hub'
   | 'settings'
   | 'modes'
   | 'more';
@@ -154,6 +156,7 @@ function normalizeSim(sim: SimState, startingCash: number): SimState {
   }
   if (!sim.spotHoldings || typeof sim.spotHoldings !== 'object') sim.spotHoldings = {};
   sim.lifestyle = normalizeLifestyle(sim.lifestyle, sim.ticks);
+  sim.hub = normalizeHub(sim.hub);
   for (const [id, holding] of Object.entries(sim.spotHoldings)) {
     if (
       !sim.instruments[id] ||
@@ -309,6 +312,8 @@ interface Store {
   lifestyleBuy: (assetId: string) => void;
   lifestyleSell: (assetId: string) => void;
 
+  hubGoto: (locId: string) => void;
+
   reset: (seed?: number, cash?: number) => void;
   save: () => Promise<void>;
   exportSave: () => void;
@@ -347,6 +352,7 @@ export const useStore = create<Store>((set, get) => ({
       'launchpad',
       'rank',
       'lifestyle',
+      'hub',
       'settings',
       'modes',
       'more'
@@ -714,6 +720,22 @@ export const useStore = create<Store>((set, get) => ({
     const { sim, notify } = get();
     const res = sellAsset(sim, assetId);
     notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  hubGoto: (locId) => {
+    const { sim, notify } = get();
+    const def = LOCATION_BY_ID[locId];
+    if (!def) return;
+    if (!isLocationUnlocked(def, sim.lifestyle.owned)) {
+      notify(`Lokasi terkunci · ${locationHint(def)}`, 'err');
+      return;
+    }
+    const hub = sim.hub;
+    if (hub.locId === locId) return;
+    hub.locId = locId;
+    if (!hub.visited.includes(locId)) hub.visited.push(locId);
+    notify(`${def.icon} ${def.name} · ${def.mood}`, 'ok');
     set((s) => ({ v: s.v + 1 }));
   },
 

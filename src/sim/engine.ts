@@ -12,6 +12,7 @@ import { spawnAiToken, tickTokens } from './launchpad';
 import { createBots, tickBots } from './bots';
 import { createWorld, worldAssetsValue, worldTick } from './world';
 import { createLifestyle, lifestyleAssetsValue, lifestyleTick } from './lifestyle';
+import { createHub } from './hub';
 import type { AssetClass, Candle, Fill, Instrument, Position, Settings, SimState } from './types';
 
 export const HOUR = 3_600_000;
@@ -182,7 +183,8 @@ export function createSim(settings: Settings): SimState {
     notices: [],
     progress: {},
     world: createWorld(settings.seed),
-    lifestyle: createLifestyle()
+    lifestyle: createLifestyle(),
+    hub: createHub()
   };
 
   for (let i = 0; i < 72; i++) tick(state, settings, true);

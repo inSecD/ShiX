@@ -21,6 +21,7 @@ import {
 import type { Settings, SimState } from '../src/sim/types';
 import { GRAD_MULTIPLE, buyToken, createToken } from '../src/sim/launchpad';
 import * as lifestyleMod from '../src/sim/lifestyle';
+import * as hubMod from '../src/sim/hub';
 import { RNG } from '../src/sim/rng';
 
 const settings: Settings = {
@@ -395,7 +396,6 @@ function openLong(sim: SimState) {
   if (Math.abs(upkeep - 20) > 1e-6) throw new Error('daily upkeep mismatch: ' + upkeep);
 
   // tick 24x (1 hari) → upkeep didebet sekali
-  const ticksBefore = sim.ticks;
   for (let i = 0; i < 24; i++) tick(sim, settings);
   const cashAfterDay = sim.cash;
   if (Math.abs(cashAfterDay - (cashAfterBuy - upkeep)) > 1e-6)
@@ -424,5 +424,54 @@ function openLong(sim: SimState) {
     watchProceeds,
     '| cash:',
     sim.cash.toFixed(0)
+  );
+}
+
+// ---------- Phase 2: open-world hub (init, unlock gating, normalize) ----------
+{
+  const { LOCATIONS, LOCATION_BY_ID, normalizeHub, isLocationUnlocked, locationHint, HOME_LOC } = hubMod;
+
+  // sim baru mulai di lokasi rumah & visited-nya berisi itu
+  const sim = freshSim();
+  if (sim.hub.locId !== HOME_LOC) throw new Error('hub should start at ' + HOME_LOC);
+  if (!sim.hub.visited.includes(HOME_LOC)) throw new Error('hub visited should include start loc');
+
+  // tiap locId di ASSET_DEFS harus nunjuk ke lokasi yang valid
+  for (const a of lifestyleMod.ASSET_DEFS) {
+    if (!LOCATION_BY_ID[a.locId]) throw new Error(`asset ${a.id} points to unknown loc ${a.locId}`);
+  }
+
+  // lokasi gratis kebuka tanpa aset; lokasi berbayar terkunci
+  const freeOpen = ['street', 'park', 'cafe', 'bursa'].every((id) =>
+    isLocationUnlocked(LOCATION_BY_ID[id], [])
+  );
+  if (!freeOpen) throw new Error('base locations should be free');
+  if (isLocationUnlocked(LOCATION_BY_ID['villa'], [])) throw new Error('villa should be locked w/o asset');
+  if (!isLocationUnlocked(LOCATION_BY_ID['villa'], ['villa'])) throw new Error('villa unlocks with villa asset');
+  if (isLocationUnlocked(LOCATION_BY_ID['garage'], [])) throw new Error('garage locked w/o vehicle');
+  if (!isLocationUnlocked(LOCATION_BY_ID['garage'], ['motor'])) throw new Error('garage unlocks with motor');
+  if (!isLocationUnlocked(LOCATION_BY_ID['home'], ['watch'])) throw new Error('home unlocks with watch');
+
+  // hint kunci ada isinya
+  const hint = locationHint(LOCATION_BY_ID['island']);
+  if (!hint || !hint.includes('Pulau')) throw new Error('island hint should mention the asset');
+
+  // normalize memperbaiki data rusak & lokasi nggak dikenal
+  const bad = normalizeHub({ locId: 'nope', visited: ['nope', 'park', 42] });
+  if (bad.locId !== HOME_LOC) throw new Error('normalize should reset unknown locId');
+  if (!bad.visited.every((id) => !!LOCATION_BY_ID[id])) throw new Error('normalize should keep only valid visited');
+  if (!bad.visited.includes('park')) throw new Error('normalize should keep valid visited');
+
+  // jumlah lokasi > jumlah gratis (ada progresi buat dibuka)
+  const unlockedNow = LOCATIONS.filter((l) => isLocationUnlocked(l, [])).length;
+  if (!(unlockedNow < LOCATIONS.length)) throw new Error('some locations should start locked');
+
+  console.log(
+    'hub init: ok | start:',
+    sim.hub.locId,
+    '| free open:',
+    unlockedNow + '/' + LOCATIONS.length,
+    '| normalize fixes: ok | hint:',
+    hint
   );
 }
