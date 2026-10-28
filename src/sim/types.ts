@@ -1,6 +1,7 @@
 import type { WorldState } from './world';
 import type { LifestyleState } from './lifestyle';
 import type { HubState } from './hub';
+import type { BusinessState } from './business';
 
 export type AssetClass =
   | 'crypto'
@@ -302,6 +303,7 @@ export interface SimState {
   world: WorldState;
   lifestyle: LifestyleState;
   hub: HubState;
+  business: BusinessState;
   social: SocialState;
   pendingEvent: PendingEvent | null;
 }

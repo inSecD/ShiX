@@ -24,6 +24,7 @@ import {
   trimWorld
 } from './sim/world';
 import { buyAsset, normalizeLifestyle, sellAsset } from './sim/lifestyle';
+import { buyBusiness, normalizeBusiness, upgradeBusiness } from './sim/business';
 import { LOCATION_BY_ID, isLocationUnlocked, locationHint, normalizeHub } from './sim/hub';
 import { chatWith, normalizeSocial } from './sim/social';
 import { clearState, loadState, saveState } from './lib/persist';
@@ -158,6 +159,7 @@ function normalizeSim(sim: SimState, startingCash: number): SimState {
   if (!sim.spotHoldings || typeof sim.spotHoldings !== 'object') sim.spotHoldings = {};
   sim.lifestyle = normalizeLifestyle(sim.lifestyle, sim.ticks);
   sim.hub = normalizeHub(sim.hub);
+  sim.business = normalizeBusiness(sim.business, sim.ticks);
   sim.social = normalizeSocial(sim.social);
   sim.pendingEvent = null;
   for (const [id, holding] of Object.entries(sim.spotHoldings)) {
@@ -314,6 +316,9 @@ interface Store {
 
   lifestyleBuy: (assetId: string) => void;
   lifestyleSell: (assetId: string) => void;
+
+  businessBuy: (businessId: string) => void;
+  businessUpgrade: (businessId: string) => void;
 
   hubGoto: (locId: string) => void;
 
@@ -724,6 +729,20 @@ export const useStore = create<Store>((set, get) => ({
   lifestyleSell: (assetId) => {
     const { sim, notify } = get();
     const res = sellAsset(sim, assetId);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  businessBuy: (businessId) => {
+    const { sim, notify } = get();
+    const res = buyBusiness(sim, businessId);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  businessUpgrade: (businessId) => {
+    const { sim, notify } = get();
+    const res = upgradeBusiness(sim, businessId);
     notify(res.msg, res.ok ? 'ok' : 'err');
     set((s) => ({ v: s.v + 1 }));
   },

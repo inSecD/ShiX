@@ -23,6 +23,7 @@ import { GRAD_MULTIPLE, buyToken, createToken } from '../src/sim/launchpad';
 import * as lifestyleMod from '../src/sim/lifestyle';
 import * as hubMod from '../src/sim/hub';
 import * as socialMod from '../src/sim/social';
+import * as businessMod from '../src/sim/business';
 import { applyEvent, generateEvent } from '../src/sim/events';
 import { RNG } from '../src/sim/rng';
 
@@ -528,5 +529,73 @@ function openLong(sim: SimState) {
   console.log(
     'event split: ok | apply pushes:', pend.ev.id,
     '| npc chat: friendship + cooldown ok | rumor tier3:', (r3.rumor ?? '').slice(0, 48)
+  );
+}
+
+// ---------- Phase 4: bisnis pasif (income/upkeep/upgrade/net-worth-neutral) ----------
+{
+  const sim = freshSim();
+  const { buyBusiness, upgradeBusiness, businessIncomePerTick, businessValueOf, getBusiness, upgradeCost, businessDef } = businessMod;
+
+  sim.cash = 1_000_000;
+
+  // beli Kedai Kopi ($5k) → cash turun, net worth TETAP (value = modal)
+  const eqBefore = equity(sim);
+  const cashBefore = sim.cash;
+  const buy = buyBusiness(sim, 'coffee');
+  if (!buy.ok) throw new Error('buyBusiness failed: ' + buy.msg);
+  if (sim.cash !== cashBefore - 5000) throw new Error('cash should drop by price');
+  const eqAfter = equity(sim);
+  if (Math.abs(eqAfter - eqBefore) > 1) throw new Error('purchase must be net-worth-neutral, delta=' + (eqAfter - eqBefore));
+
+  // dobel beli → tolak
+  if (buyBusiness(sim, 'coffee').ok) throw new Error('duplicate buy should fail');
+
+  // income per tick masuk pas businessTick
+  const inc = businessIncomePerTick(sim.business);
+  if (inc <= 0) throw new Error('income should be positive');
+  const cashPreTick = sim.cash;
+  businessMod.businessTick(sim);
+  if (Math.abs(sim.cash - (cashPreTick + inc)) > 1e-6) throw new Error('businessTick should add income per tick');
+
+  // upkeep: setelah 24 tick, ke-debet sekali
+  sim.ticks = sim.business.lastUpkeepTick + 24;
+  const cashPreUp = sim.cash;
+  businessMod.businessTick(sim);
+  const upkeep = businessMod.businessDailyUpkeep(sim.business);
+  if (upkeep <= 0) throw new Error('upkeep should be positive');
+  if (!(sim.cash < cashPreUp)) throw new Error('daily upkeep should debit cash');
+
+  // upgrade: level naik, income naik, value = modal (beli + upgrade), net-worth-neutral juga
+  const inst = getBusiness(sim.business, 'coffee');
+  if (!inst) throw new Error('should own coffee');
+  const def = businessDef('coffee')!;
+  const upCost = upgradeCost(def, inst.level);
+  sim.cash = 100_000;
+  const eqPreUp = equity(sim);
+  const cashPreUpg = sim.cash;
+  const up = upgradeBusiness(sim, 'coffee');
+  if (!up.ok) throw new Error('upgrade failed: ' + up.msg);
+  if (inst.level !== 2) throw new Error('level should be 2');
+  if (sim.cash !== cashPreUpg - upCost) throw new Error('cash should drop by upgrade cost');
+  const eqPostUp = equity(sim);
+  if (Math.abs(eqPostUp - eqPreUp) > 1) throw new Error('upgrade must be net-worth-neutral');
+  if (businessIncomePerTick(sim.business) <= inc) throw new Error('upgrade should raise income');
+  if (businessValueOf(def, 2) <= businessValueOf(def, 1)) throw new Error('value should rise with level');
+
+  // max level cap
+  inst.level = def.maxLevel;
+  if (upgradeBusiness(sim, 'coffee').ok) throw new Error('max-level upgrade should fail');
+
+  // normalize: buang id asing, clamp level
+  const norm = businessMod.normalizeBusiness({ owned: [{ id: 'ghost', level: 9 }, { id: 'foodtruck', level: 99 }], lastUpkeepTick: 5 }, 100);
+  if (norm.owned.length !== 1 || norm.owned[0].id !== 'foodtruck' || norm.owned[0].level !== 3)
+    throw new Error('normalizeBusiness should drop unknown ids and clamp level');
+
+  console.log(
+    'business buy net-neutral: ok | income/tick:', inc.toFixed(2),
+    '| upkeep/day:', upkeep.toFixed(0),
+    '| upgrade L2 cost:', upCost,
+    '| value L2:', businessValueOf(def, 2)
   );
 }
