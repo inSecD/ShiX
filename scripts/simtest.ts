@@ -27,6 +27,8 @@ import * as socialMod from '../src/sim/social';
 import * as businessMod from '../src/sim/business';
 import * as feedMod from '../src/sim/feed';
 import * as perksMod from '../src/sim/perks';
+import * as profileMod from '../src/sim/profile';
+import { parseMention, mentionsHeldCoin } from '../src/sim/mentions';
 import { applyEvent, generateEvent } from '../src/sim/events';
 import { RNG } from '../src/sim/rng';
 
@@ -722,5 +724,107 @@ function openLong(sim: SimState) {
     '| cooldown 6 →', wait + 'j',
     '| rumor tier bonus: ok',
     '| active perks:', act.map((x) => x.name).join(', ')
+  );
+}
+
+// ---------- Phase 6: fame, mention parser, dan pengaruh post ----------
+{
+  const sim = freshSim();
+  const { normalizeProfile, publishPost, postCooldownLeft, toggleFollow, profileTick, INFLUENCE_THRESHOLD } = profileMod;
+
+  // universe punya koin Weekend (WKND) buat contoh "have fun on weekend!"
+  if (!sim.instruments['WKND']) throw new Error('WKND weekend memecoin should exist in universe');
+
+  // ---- parser: teks bebas → instrumen ----
+  const m1 = parseMention(sim, 'have fun on weekend!');
+  if (!m1 || m1.instId !== 'WKND') throw new Error('"weekend" should resolve to WKND, got ' + m1?.instId);
+
+  const m2 = parseMention(sim, 'wknd to the moon');
+  if (!m2 || m2.instId !== 'WKND') throw new Error('"wknd" (kode/tick) should resolve to WKND, got ' + m2?.instId);
+
+  const m3 = parseMention(sim, 'gas $WKND siapa gaet duluan');
+  if (!m3 || m3.instId !== 'WKND') throw new Error('"$WKND" should resolve to WKND, got ' + m3?.instId);
+
+  const m4 = parseMention(sim, 'selamat hari libur semua');
+  if (m4 !== null) throw new Error('unrelated text should not mention anything, got ' + m4.instId);
+
+  // ---- konteks posisi: kelas "memecoin" resolve ke yang lo pegang ----
+  sim.spotHoldings['DGE'] = { instId: 'DGE', qty: 1000, avgCost: 0.1, openedAt: sim.simTime };
+  const m5 = parseMention(sim, 'menurut gua memecoin lagi enak');
+  if (!m5 || m5.instId !== 'DGE') throw new Error('class "memecoin" should resolve to held coin DGE, got ' + m5?.instId);
+  if (mentionsHeldCoin(sim, 'menurut gua memecoin lagi enak') !== 'DGE')
+    throw new Error('mentionsHeldCoin should return held coin');
+  if (mentionsHeldCoin(sim, 'weekend keren') !== null)
+    throw new Error('WKND is not held → should not count as held mention');
+
+  // ---- publish post ----
+  const p0 = { ...sim.profile };
+  const bad = publishPost(sim, '   ');
+  if (bad.ok) throw new Error('empty post should be rejected');
+  const res = publishPost(sim, 'have fun on weekend!');
+  if (!res.ok) throw new Error('publish failed: ' + res.msg);
+  if (res.mentionTag !== 'WKND') throw new Error('post should tag WKND, got ' + res.mentionTag);
+
+  const post = sim.feed.posts[0];
+  if (post.mention !== 'WKND' || post.tag !== 'WKND') throw new Error('feed post should carry mention');
+  if (post.likes <= 0) throw new Error('post should get likes');
+  if (post.reactions.length < 2) throw new Error('post should get audience reactions');
+  if (sim.profile.followers <= p0.followers) throw new Error('followers should grow after engaged post');
+  if (sim.profile.posts !== p0.posts + 1) throw new Error('post count should increment');
+
+  // cooldown ngepost
+  if (postCooldownLeft(sim) <= 0) throw new Error('post cooldown should engage');
+  if (publishPost(sim, 'spam lagi').ok) throw new Error('second post inside cooldown should fail');
+
+  // ---- publik sebagian: AI tau lo pegang koin yang lo sebut ----
+  // DGE dipegang → post soal DGE harus menghasilkan reaksi yang ngebahas posisi.
+  // Math.random di-pin biar reactor-nya deterministik: bot_0 (momentum) + bot_1 (contrarian).
+  sim.ticks += 99; // lewatin cooldown
+  const origRandom2 = Math.random;
+  Math.random = () => 0;
+  const res2 = publishPost(sim, 'dogicoin best coin, gua ajak semua');
+  Math.random = origRandom2;
+  if (!res2.ok) throw new Error('publish 2 failed: ' + res2.msg);
+  const post2 = sim.feed.posts[0];
+  if (post2.mention !== 'DGE') throw new Error('post 2 should mention DGE, got ' + post2.mention);
+  if (!post2.reactions.every((r) => r.text.includes('$DGE')))
+    throw new Error('audience should react to the mentioned coin: ' + post2.reactions.map((r) => r.text).join(' | '));
+  // kontrarian tau posisi publik lo → nyebut "nyangkut"
+  if (!post2.reactions.some((r) => r.text.includes('nyangkut')))
+    throw new Error('reaction should acknowledge public position: ' + post2.reactions.map((r) => r.text).join(' | '));
+
+  // ---- efek influencer: follower cukup → hype koin naik ----
+  sim.ticks += 99;
+  sim.profile.followers = INFLUENCE_THRESHOLD;
+  const inst = sim.instruments['WKND'];
+  const hypeBefore = inst.hype;
+  const res3 = publishPost(sim, 'weekend is a lifestyle, $WKND no cap');
+  if (!res3.ok) throw new Error('publish 3 failed: ' + res3.msg);
+  if (!(inst.hype > hypeBefore)) throw new Error('influential post should raise hype');
+
+  // ---- following ----
+  const bot = sim.bots[0];
+  const f1 = toggleFollow(sim, bot.id);
+  if (!f1.ok || !sim.profile.following.includes(bot.id)) throw new Error('follow should add to following');
+  if ((sim.social.friendship[bot.id] ?? 0) < 3) throw new Error('follow should grant friendship');
+  const f2 = toggleFollow(sim, bot.id);
+  if (!f2.ok || sim.profile.following.includes(bot.id)) throw new Error('unfollow should remove from following');
+
+  // ---- pertumbuhan harian ----
+  const fBefore = sim.profile.followers;
+  sim.ticks = Math.ceil(sim.ticks / 24) * 24;
+  profileTick(sim);
+  if (sim.profile.followers < fBefore) throw new Error('daily growth must not lose followers');
+
+  // ---- normalize ----
+  const norm = normalizeProfile({ followers: -5, following: ['bot_0', 'bot_0', 7], fame: 500, lastPostTick: 'x', lifetimeLikes: '9', posts: null });
+  if (norm.followers !== 0 || norm.following.length !== 1 || norm.fame !== 100 || norm.lastPostTick !== -999)
+    throw new Error('normalizeProfile should clamp/sanitize');
+
+  console.log(
+    'mention: weekend→', m1.instId, '| wknd→', m2.instId, '| class→', m5.instId,
+    '| post likes:', post.likes, '| followers:', sim.profile.followers,
+    '| reaction:', post2.reactions[0].text.slice(0, 40),
+    '| hype bump: ok | follow: ok'
   );
 }

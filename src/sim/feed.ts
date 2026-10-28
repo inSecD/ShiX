@@ -36,7 +36,19 @@ export function normalizeFeed(f: unknown): FeedState {
         name: typeof post.name === 'string' ? post.name : 'CT',
         emoji: typeof post.emoji === 'string' ? post.emoji : '🐦',
         text: post.text,
-        tag: typeof post.tag === 'string' ? post.tag : null
+        tag: typeof post.tag === 'string' ? post.tag : null,
+        mention: typeof post.mention === 'string' ? post.mention : null,
+        likes: Math.max(0, Math.round(Number(post.likes) || 0)),
+        reactions: Array.isArray(post.reactions)
+          ? post.reactions
+              .filter((r): r is NonNullable<typeof r> => !!r && typeof r.text === 'string')
+              .slice(0, 6)
+              .map((r) => ({
+                name: typeof r.name === 'string' ? r.name : 'Trader',
+                emoji: typeof r.emoji === 'string' ? r.emoji : '🤖',
+                text: r.text
+              }))
+          : []
       });
       if (posts.length >= MAX_POSTS) break;
     }
@@ -67,10 +79,17 @@ function authorOf(state: SimState, rng: RNG, prefer?: BotStrategy): Bot {
   return rng.pick(bots);
 }
 
-function pushPost(state: SimState, post: Omit<FeedPost, 'id' | 't'>): void {
+function pushPost(state: SimState, post: Omit<FeedPost, 'id' | 't' | 'mention' | 'likes' | 'reactions'>): void {
   const feed = state.feed;
   feed.seq += 1;
-  feed.posts.unshift({ id: `fp${feed.seq}`, t: state.simTime, ...post });
+  feed.posts.unshift({
+    id: `fp${feed.seq}`,
+    t: state.simTime,
+    mention: null,
+    likes: 0,
+    reactions: [],
+    ...post
+  });
   if (feed.posts.length > MAX_POSTS) feed.posts.length = MAX_POSTS;
   feed.lastByKind[post.kind] = state.ticks;
 }

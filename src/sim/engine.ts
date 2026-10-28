@@ -17,6 +17,7 @@ import { createSocial } from './social';
 import { businessesValue, businessTick, createBusiness } from './business';
 import { createFeed, feedTick } from './feed';
 import { feeMultOf } from './perks';
+import { createProfile, profileTick } from './profile';
 import type { AssetClass, Candle, Fill, Instrument, Position, Settings, SimState } from './types';
 
 export const HOUR = 3_600_000;
@@ -192,6 +193,7 @@ export function createSim(settings: Settings): SimState {
     business: createBusiness(),
     social: createSocial(),
     feed: createFeed(),
+    profile: createProfile(),
     pendingEvent: null
   };
 
@@ -235,6 +237,7 @@ export function tick(state: SimState, settings: Settings, warmup = false): void 
   lifestyleTick(state);
   businessTick(state);
   feedTick(state, rng);
+  profileTick(state);
   if (!warmup) {
     for (const ev of worldNews.slice(0, 2)) {
       state.events.unshift({

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../store';
 import { STRATEGY_LABEL } from '../sim/bots';
 import { chatCooldownLeft, friendshipOf, npcsAtLocation } from '../sim/social';
+import { postCooldownLeft } from '../sim/profile';
 import {
   LOCATIONS,
   LOCATION_BY_ID,
@@ -59,15 +60,25 @@ function fmtAgo(deltaMs: number): string {
   return `${Math.floor(h / 24)}h lalu`;
 }
 
+/** angka pendek: 950 → 950, 12400 → 12,4rb, 1200000 → 1,2jt */
+function fmtFollowers(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace('.', ',')}jt`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace('.', ',')}rb`;
+  return String(n);
+}
+
 export function WorldHubView() {
   const sim = useStore((s) => s.sim);
   const hubGoto = useStore((s) => s.hubGoto);
   const npcChat = useStore((s) => s.npcChat);
+  const publishPost = useStore((s) => s.publishPost);
+  const toggleFollow = useStore((s) => s.toggleFollow);
   const notify = useStore((s) => s.notify);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [width, setWidth] = useState(360);
+  const [draft, setDraft] = useState('');
 
   const owned = sim.lifestyle.owned;
   const locId = sim.hub.locId;
@@ -76,9 +87,28 @@ export function WorldHubView() {
   const npcs = npcsAtLocation(sim, locId);
   const social = sim.social;
   const feed = sim.feed;
+  const profile = sim.profile;
+  const postWait = postCooldownLeft(sim);
+  const heldIds = new Set<string>();
+  for (const p of Object.values(sim.positions)) if (p.qty > 0) heldIds.add(p.instId);
+  for (const h of Object.values(sim.spotHoldings)) if (h.qty > 0) heldIds.add(h.instId);
   const convo = social.lastConvo;
   const activeRumor = social.rumor;
   const rumorBot = activeRumor ? sim.bots.find((b) => b.id === activeRumor.botId) : null;
+
+  const doPost = () => {
+    publishPost(draft);
+    setDraft('');
+  };
+
+  const followBtn = (botId: string) => {
+    const following = profile.following.includes(botId);
+    return (
+      <button className={`ct-follow${following ? ' on' : ''}`} onClick={() => toggleFollow(botId)}>
+        {following ? '✓ Ikut' : '+ Ikuti'}
+      </button>
+    );
+  };
 
   // ---- refs supaya loop rAF nggak perlu di-restart tiap render ----
   const widthRef = useRef(width);
@@ -399,9 +429,31 @@ export function WorldHubView() {
       <div className="panel">
         <div className="panel-head">
           <span>🐦 CT Feed</span>
-          <span className="badge">{feed.posts.length} post</span>
+          <span className="badge accent">
+            👥 {fmtFollowers(profile.followers)} · ⭐ {Math.round(profile.fame)}
+          </span>
         </div>
         <div className="panel-body ct-feed">
+          <div className="ct-composer">
+            <textarea
+              className="ct-input"
+              rows={2}
+              maxLength={180}
+              placeholder="Lagi pingin ngomong apa ke publik? (mis. have fun on weekend!)"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+            />
+            <div className="ct-composer-row">
+              <span className="tiny muted">
+                {fmtFollowers(profile.followers)} followers · {profile.following.length} following · cooldown{' '}
+                {postWait}j
+              </span>
+              <button className="primary" disabled={postWait > 0 || !draft.trim()} onClick={doPost}>
+                Post
+              </button>
+            </div>
+          </div>
+
           {feed.posts.slice(0, 20).map((p) => (
             <div className={`ct-post${p.authorId === 'you' ? ' you' : ''}`} key={p.id}>
               <span className="ct-ico">{p.emoji}</span>
@@ -409,9 +461,29 @@ export function WorldHubView() {
                 <div className="ct-head">
                   <b>{p.name}</b>
                   {p.tag && <span className="ct-tag">${p.tag}</span>}
+                  {p.authorId !== 'you' && followBtn(p.authorId)}
                   <span className="ct-time">{fmtAgo(sim.simTime - p.t)}</span>
                 </div>
                 <div className="ct-text">{p.text}</div>
+                {p.mention && (
+                  <div className="ct-mention">
+                    🎯 sistem nangkep <b>${p.mention}</b>
+                    {heldIds.has(p.mention) ? ' · lo lagi pegang ini' : ''}
+                  </div>
+                )}
+                {(p.likes > 0 || p.reactions.length > 0) && (
+                  <div className="ct-reacts">
+                    {p.likes > 0 && <span className="ct-likes">❤️ {fmtFollowers(p.likes)}</span>}
+                    {p.reactions.map((r, i) => (
+                      <div className="ct-react" key={i}>
+                        <span className="ct-react-ico">{r.emoji}</span>
+                        <span>
+                          <b>{r.name}</b>: {r.text}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           ))}

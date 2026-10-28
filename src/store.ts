@@ -26,6 +26,7 @@ import {
 import { buyAsset, normalizeLifestyle, sellAsset } from './sim/lifestyle';
 import { buyBusiness, normalizeBusiness, upgradeBusiness } from './sim/business';
 import { feedFromYou, normalizeFeed } from './sim/feed';
+import { normalizeProfile, publishPost, toggleFollow } from './sim/profile';
 import { LOCATION_BY_ID, isLocationUnlocked, locationHint, normalizeHub } from './sim/hub';
 import { chatWith, normalizeSocial } from './sim/social';
 import { clearState, loadState, saveState } from './lib/persist';
@@ -163,6 +164,7 @@ function normalizeSim(sim: SimState, startingCash: number): SimState {
   sim.business = normalizeBusiness(sim.business, sim.ticks);
   sim.social = normalizeSocial(sim.social);
   sim.feed = normalizeFeed(sim.feed);
+  sim.profile = normalizeProfile(sim.profile);
   sim.pendingEvent = null;
   for (const [id, holding] of Object.entries(sim.spotHoldings)) {
     if (
@@ -321,6 +323,9 @@ interface Store {
 
   businessBuy: (businessId: string) => void;
   businessUpgrade: (businessId: string) => void;
+
+  publishPost: (text: string) => void;
+  toggleFollow: (botId: string) => void;
 
   hubGoto: (locId: string) => void;
 
@@ -749,6 +754,20 @@ export const useStore = create<Store>((set, get) => ({
     const res = upgradeBusiness(sim, businessId);
     notify(res.msg, res.ok ? 'ok' : 'err');
     if (res.ok) feedFromYou(sim, `${res.msg}. Expand terus.`, 'Bisnis');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  publishPost: (text) => {
+    const { sim, notify } = get();
+    const res = publishPost(sim, text);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  toggleFollow: (botId) => {
+    const { sim, notify } = get();
+    const res = toggleFollow(sim, botId);
+    notify(res.msg, res.ok ? 'ok' : 'err');
     set((s) => ({ v: s.v + 1 }));
   },
 

@@ -169,6 +169,17 @@ export interface FeedPost {
   emoji: string;
   text: string;
   tag: string | null;
+  /** mention instrument hasil parser post pemain (instId) */
+  mention: string | null;
+  likes: number;
+  reactions: FeedReaction[];
+}
+
+/** balasan trader AI terhadap post (persona-flavored) */
+export interface FeedReaction {
+  name: string;
+  emoji: string;
+  text: string;
 }
 
 export interface FeedState {
@@ -178,6 +189,17 @@ export interface FeedState {
   lastByKind: Record<string, number>;
   /** id event terakhir yang udah diambil reaksinya, biar nggak dobel */
   lastEventId: string | null;
+}
+
+/** profil sosmed pemain — follower menentukan jangkauan & kepercayaan */
+export interface ProfileState {
+  followers: number;
+  following: string[];
+  /** 0..100 — makin tinggi makin sering post dapet engagement */
+  fame: number;
+  lastPostTick: number;
+  lifetimeLikes: number;
+  posts: number;
 }
 
 export interface LaunchToken {
@@ -327,5 +349,6 @@ export interface SimState {
   business: BusinessState;
   social: SocialState;
   feed: FeedState;
+  profile: ProfileState;
   pendingEvent: PendingEvent | null;
 }

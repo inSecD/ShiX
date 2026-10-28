@@ -2940,3 +2940,93 @@ input[type='range']::-webkit-slider-thumb {
   font-size: 11px;
   color: var(--accent);
 }
+
+/* ---------- CT Feed composer & reaksi (Fase 6) ---------- */
+.ct-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px dashed var(--line);
+}
+
+.ct-input {
+  width: 100%;
+  resize: none;
+  background: #0c111b;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 8px 10px;
+}
+
+.ct-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.ct-composer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ct-follow {
+  font-size: 10px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #131a29;
+  color: var(--dim);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.ct-follow.on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.ct-mention {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--warn);
+}
+
+.ct-reacts {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ct-likes {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--up);
+}
+
+.ct-react {
+  display: flex;
+  gap: 6px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--dim);
+  background: #10182a;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 5px 8px;
+}
+
+.ct-react b {
+  color: var(--text, #c7d3e6);
+  font-size: 11px;
+}
+
+.ct-react-ico {
+  flex: 0 0 auto;
+}
