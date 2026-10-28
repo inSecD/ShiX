@@ -1,4 +1,7 @@
 import type { WorldState } from './world';
+import type { LifestyleState } from './lifestyle';
+import type { HubState } from './hub';
+import type { BusinessState } from './business';
 
 export type AssetClass =
   | 'crypto'
@@ -120,6 +123,101 @@ export interface GameEvent {
   cls: AssetClass | null;
 }
 
+/** event yang udah digenerate tapi BELUM diterapkan (dibocorkan sebagai rumor dulu) */
+export interface PendingEvent {
+  ev: GameEvent;
+  tplId: string;
+  impact: number;
+  bps: number;
+  ccyCode: string | null;
+  sector: string | null;
+  instId: string | null;
+  macro: Partial<MacroState>;
+}
+
+export interface RumorState {
+  botId: string;
+  text: string;
+  tier: number;
+  evId: string | null;
+  at: number;
+}
+
+export interface ConvoState {
+  botId: string;
+  greeting: string;
+  rumor: string | null;
+  gain: number;
+  at: number;
+}
+
+export interface SocialState {
+  friendship: Record<string, number>;
+  lastChat: Record<string, number>;
+  met: string[];
+  rumor: RumorState | null;
+  lastConvo: ConvoState | null;
+}
+
+/** satu post di CT Feed — dibikin prosedural dari kejadian sim beneran */
+export interface FeedPost {
+  id: string;
+  t: number;
+  kind: 'event' | 'mover' | 'hype' | 'rumor' | 'you' | 'chat';
+  authorId: string;
+  name: string;
+  emoji: string;
+  /** handle ala X (@budi_trader) */
+  handle: string;
+  text: string;
+  tag: string | null;
+  /** mention instrument hasil parser post pemain (instId) */
+  mention: string | null;
+  likes: number;
+  reactions: FeedReaction[];
+  /** media post (chart koin / gambar prosedural) */
+  media: PostMedia | null;
+  /** udah di-like/di-repost pemain? */
+  liked: boolean;
+  reposted: boolean;
+  reposts: number;
+  replies: number;
+  /** post balasan siapa (id) — tampil "membalas @" */
+  replyTo: string | null;
+}
+
+/** media post: mini-chart koin atau gambar prosedural (deterministik dari seed) */
+export type PostMedia =
+  | { kind: 'chart'; instId: string; seed: string }
+  | { kind: 'art'; seed: string; emoji: string };
+
+/** balasan trader AI terhadap post (persona-flavored) */
+export interface FeedReaction {
+  name: string;
+  emoji: string;
+  text: string;
+}
+
+export interface FeedState {
+  posts: FeedPost[];
+  seq: number;
+  /** kapan terakhir tiap jenis ngepost (tick) — buat cooldown anti-spam */
+  lastByKind: Record<string, number>;
+  /** id event terakhir yang udah diambil reaksinya, biar nggak dobel */
+  lastEventId: string | null;
+}
+
+/** profil sosmed pemain — follower menentukan jangkauan & kepercayaan */
+export interface ProfileState {
+  followers: number;
+  following: string[];
+  /** 0..100 — makin tinggi makin sering post dapet engagement */
+  fame: number;
+  lastPostTick: number;
+  lifetimeLikes: number;
+  posts: number;
+}
+
 export interface LaunchToken {
   id: string;
   name: string;
@@ -193,6 +291,10 @@ export interface Bot {
   id: string;
   name: string;
   emoji: string;
+  /** handle ala X (@budi_trader) */
+  handle: string;
+  /** berapa orang yang ngikutin akun ini — buat tampilan sosmed */
+  followers: number;
   strategy: BotStrategy;
   startEquity: number;
   cash: number;
@@ -262,4 +364,11 @@ export interface SimState {
   notices: string[];
   progress: Record<string, boolean>;
   world: WorldState;
+  lifestyle: LifestyleState;
+  hub: HubState;
+  business: BusinessState;
+  social: SocialState;
+  feed: FeedState;
+  profile: ProfileState;
+  pendingEvent: PendingEvent | null;
 }

@@ -2,6 +2,7 @@ import { createSim, tick, equity, spotUnrealizedPnl, spotValue, unrealizedPnl } 
 import {
   buySpot,
   closePositionById,
+  estimateFillPrice,
   isSpotable,
   placeOrder,
   sellSpot,
@@ -20,6 +21,17 @@ import {
 } from '../src/sim/world';
 import type { Settings, SimState } from '../src/sim/types';
 import { GRAD_MULTIPLE, buyToken, createToken } from '../src/sim/launchpad';
+import * as lifestyleMod from '../src/sim/lifestyle';
+import * as hubMod from '../src/sim/hub';
+import * as socialMod from '../src/sim/social';
+import * as businessMod from '../src/sim/business';
+import * as feedMod from '../src/sim/feed';
+import * as perksMod from '../src/sim/perks';
+import * as profileMod from '../src/sim/profile';
+import { parseMention, mentionsHeldCoin } from '../src/sim/mentions';
+import { applyEvent, generateEvent } from '../src/sim/events';
+import { createBots } from '../src/sim/bots';
+import { NPC_COUNT, TOTAL_BOTS, growBots } from '../src/sim/people';
 import { RNG } from '../src/sim/rng';
 
 const settings: Settings = {
@@ -362,5 +374,547 @@ function openLong(sim: SimState) {
     spot.avgCost.toPrecision(6),
     '| inst:',
     token.instId
+  );
+}
+
+// ---------- Phase 1: lifestyle assets (beli, upkeep harian, jual 70%, net worth) ----------
+{
+  const sim = freshSim();
+  const { buyAsset, sellAsset, lifestyleAssetsValue, dailyUpkeep, SELL_RATE } = lifestyleMod;
+
+  // beli dua aset muat di modal $100k: motor ($9k) + jam ($65k)
+  const b1 = buyAsset(sim, 'motor');
+  if (!b1.ok) throw new Error('buy motor failed: ' + b1.msg);
+  const b2 = buyAsset(sim, 'watch');
+  if (!b2.ok) throw new Error('buy watch failed: ' + b2.msg);
+
+  // dobel beli harus ditolak
+  if (buyAsset(sim, 'motor').ok) throw new Error('duplicate buy should fail');
+
+  // beli aset kemahalan harus ditolak (island $160k > cash sisa)
+  if (buyAsset(sim, 'island').ok) throw new Error('over-budget buy should fail');
+
+  const cashAfterBuy = sim.cash;
+  const ownedValue = lifestyleAssetsValue(sim.lifestyle);
+  if (Math.abs(ownedValue - (9000 + 65000)) > 1e-6) throw new Error('asset value mismatch: ' + ownedValue);
+  // net worth harus ikut naik sebesar nilai aset
+  if (Math.abs(equity(sim) - (cashAfterBuy + ownedValue)) > ownedValue * 1e-6 + 1)
+    throw new Error('equity should include lifestyle asset value');
+
+  // upkeep harian = motor(8) + jam(12) = $20
+  const upkeep = dailyUpkeep(sim.lifestyle);
+  if (Math.abs(upkeep - 20) > 1e-6) throw new Error('daily upkeep mismatch: ' + upkeep);
+
+  // tick 24x (1 hari) → upkeep didebet sekali
+  for (let i = 0; i < 24; i++) tick(sim, settings);
+  const cashAfterDay = sim.cash;
+  if (Math.abs(cashAfterDay - (cashAfterBuy - upkeep)) > 1e-6)
+    throw new Error(`upkeep not debited after a day: ${cashAfterBuy} -> ${cashAfterDay} (want -${upkeep})`);
+  if (sim.lifestyle.stats.upkeepPaid < upkeep) throw new Error('upkeepPaid stat not tracked');
+
+  // tick 5x lagi (belum 24 penuh) → TIDAK boleh didebet lagi
+  for (let i = 0; i < 5; i++) tick(sim, settings);
+  if (Math.abs(sim.cash - cashAfterDay) > 1e-6) throw new Error('upkeep debited more than once per day');
+
+  // jual jam → dapat 70%
+  const watchProceeds = Math.round(65000 * SELL_RATE);
+  const cashBeforeSell = sim.cash;
+  const s1 = sellAsset(sim, 'watch');
+  if (!s1.ok) throw new Error('sell watch failed: ' + s1.msg);
+  if (sim.cash - cashBeforeSell !== watchProceeds) throw new Error('sell proceeds mismatch');
+  if (sim.lifestyle.owned.includes('watch')) throw new Error('watch should be sold');
+  if (sellAsset(sim, 'watch').ok) throw new Error('double sell should fail');
+
+  console.log(
+    'lifestyle buy: ok | owned value:',
+    ownedValue.toFixed(0),
+    '| upkeep/day:',
+    upkeep.toFixed(0),
+    '| upkeep debited: ok | sell@' + Math.round(SELL_RATE * 100) + '%:',
+    watchProceeds,
+    '| cash:',
+    sim.cash.toFixed(0)
+  );
+}
+
+// ---------- Phase 2: open-world hub (init, unlock gating, normalize) ----------
+{
+  const { LOCATIONS, LOCATION_BY_ID, normalizeHub, isLocationUnlocked, locationHint, HOME_LOC } = hubMod;
+
+  // sim baru mulai di lokasi rumah & visited-nya berisi itu
+  const sim = freshSim();
+  if (sim.hub.locId !== HOME_LOC) throw new Error('hub should start at ' + HOME_LOC);
+  if (!sim.hub.visited.includes(HOME_LOC)) throw new Error('hub visited should include start loc');
+
+  // tiap locId di ASSET_DEFS harus nunjuk ke lokasi yang valid
+  for (const a of lifestyleMod.ASSET_DEFS) {
+    if (!LOCATION_BY_ID[a.locId]) throw new Error(`asset ${a.id} points to unknown loc ${a.locId}`);
+  }
+
+  // lokasi gratis kebuka tanpa aset; lokasi berbayar terkunci
+  const freeOpen = ['street', 'park', 'cafe', 'bursa'].every((id) =>
+    isLocationUnlocked(LOCATION_BY_ID[id], [])
+  );
+  if (!freeOpen) throw new Error('base locations should be free');
+  if (isLocationUnlocked(LOCATION_BY_ID['villa'], [])) throw new Error('villa should be locked w/o asset');
+  if (!isLocationUnlocked(LOCATION_BY_ID['villa'], ['villa'])) throw new Error('villa unlocks with villa asset');
+  if (isLocationUnlocked(LOCATION_BY_ID['garage'], [])) throw new Error('garage locked w/o vehicle');
+  if (!isLocationUnlocked(LOCATION_BY_ID['garage'], ['motor'])) throw new Error('garage unlocks with motor');
+  if (!isLocationUnlocked(LOCATION_BY_ID['home'], ['watch'])) throw new Error('home unlocks with watch');
+
+  // hint kunci ada isinya
+  const hint = locationHint(LOCATION_BY_ID['island']);
+  if (!hint || !hint.includes('Pulau')) throw new Error('island hint should mention the asset');
+
+  // normalize memperbaiki data rusak & lokasi nggak dikenal
+  const bad = normalizeHub({ locId: 'nope', visited: ['nope', 'park', 42] });
+  if (bad.locId !== HOME_LOC) throw new Error('normalize should reset unknown locId');
+  if (!bad.visited.every((id) => !!LOCATION_BY_ID[id])) throw new Error('normalize should keep only valid visited');
+  if (!bad.visited.includes('park')) throw new Error('normalize should keep valid visited');
+
+  // jumlah lokasi > jumlah gratis (ada progresi buat dibuka)
+  const unlockedNow = LOCATIONS.filter((l) => isLocationUnlocked(l, [])).length;
+  if (!(unlockedNow < LOCATIONS.length)) throw new Error('some locations should start locked');
+
+  console.log(
+    'hub init: ok | start:',
+    sim.hub.locId,
+    '| free open:',
+    unlockedNow + '/' + LOCATIONS.length,
+    '| normalize fixes: ok | hint:',
+    hint
+  );
+}
+
+// ---------- Phase 3: NPC, friendship, rumor (event split generate/apply) ----------
+{
+  const sim = freshSim();
+  const rng = new RNG(7);
+  const { chatWith, friendshipOf, rumorTier, npcsAtLocation } = socialMod;
+
+  // createSim nyisain minimal satu pending event buat dibocorkan
+  if (!sim.pendingEvent) throw new Error('createSim should queue a pending event');
+
+  // generateEvent: murni, nggak push event & nggak ubah macro
+  const evBefore = sim.events.length;
+  const riskBefore = sim.macro.risk;
+  const pend = generateEvent(sim, rng);
+  if (!pend) throw new Error('generateEvent returned null');
+  if (sim.events.length !== evBefore) throw new Error('generateEvent must not push events');
+  if (sim.macro.risk !== riskBefore) throw new Error('generateEvent must not change macro');
+
+  // applyEvent: efek samping + masuk feed, objek event sama
+  const evMid = sim.events.length;
+  applyEvent(sim, pend);
+  if (sim.events.length !== evMid + 1) throw new Error('applyEvent should push one event');
+  if (sim.events[0].id !== pend.ev.id) throw new Error('applied event should be the same event');
+
+  // Aria ada di Jalan Kota (lokasi gratis)
+  if (!npcsAtLocation(sim, 'street').some((b) => b.id === 'bot_0')) throw new Error('Aria should be at street');
+
+  // ngobrol: friendship naik, lalu kena cooldown
+  const before = friendshipOf(sim.social, 'bot_0');
+  const r1 = chatWith(sim, 'bot_0');
+  if (!r1.ok) throw new Error('chat should succeed: ' + r1.msg);
+  if (friendshipOf(sim.social, 'bot_0') <= before) throw new Error('friendship should increase');
+  if (chatWith(sim, 'bot_0').ok) throw new Error('immediate re-chat should be on cooldown');
+
+  // paksa rumor: friendship tier-3 + Math.random deterministik
+  sim.social.friendship['bot_0'] = 90;
+  sim.social.lastChat['bot_0'] = sim.ticks - 999;
+  const origRandom = Math.random;
+  Math.random = () => 0;
+  const r3 = chatWith(sim, 'bot_0');
+  Math.random = origRandom;
+  if (!r3.rumor) throw new Error('tier-3 chat should leak a rumor');
+  if (!sim.social.rumor || sim.social.rumor.tier !== 3) throw new Error('rumor stored with wrong tier');
+
+  // ambang tier rumor
+  if (rumorTier(0) !== 0 || rumorTier(25) !== 1 || rumorTier(55) !== 2 || rumorTier(85) !== 3)
+    throw new Error('rumorTier thresholds wrong');
+
+  console.log(
+    'event split: ok | apply pushes:', pend.ev.id,
+    '| npc chat: friendship + cooldown ok | rumor tier3:', (r3.rumor ?? '').slice(0, 48)
+  );
+}
+
+// ---------- Phase 4: bisnis pasif (income/upkeep/upgrade/net-worth-neutral) ----------
+{
+  const sim = freshSim();
+  const { buyBusiness, upgradeBusiness, businessIncomePerTick, businessValueOf, getBusiness, upgradeCost, businessDef } = businessMod;
+
+  sim.cash = 1_000_000;
+
+  // beli Kedai Kopi ($5k) → cash turun, net worth TETAP (value = modal)
+  const eqBefore = equity(sim);
+  const cashBefore = sim.cash;
+  const buy = buyBusiness(sim, 'coffee');
+  if (!buy.ok) throw new Error('buyBusiness failed: ' + buy.msg);
+  if (sim.cash !== cashBefore - 5000) throw new Error('cash should drop by price');
+  const eqAfter = equity(sim);
+  if (Math.abs(eqAfter - eqBefore) > 1) throw new Error('purchase must be net-worth-neutral, delta=' + (eqAfter - eqBefore));
+
+  // dobel beli → tolak
+  if (buyBusiness(sim, 'coffee').ok) throw new Error('duplicate buy should fail');
+
+  // income per tick masuk pas businessTick
+  const inc = businessIncomePerTick(sim.business);
+  if (inc <= 0) throw new Error('income should be positive');
+  const cashPreTick = sim.cash;
+  businessMod.businessTick(sim);
+  if (Math.abs(sim.cash - (cashPreTick + inc)) > 1e-6) throw new Error('businessTick should add income per tick');
+
+  // upkeep: setelah 24 tick, ke-debet sekali
+  sim.ticks = sim.business.lastUpkeepTick + 24;
+  const cashPreUp = sim.cash;
+  businessMod.businessTick(sim);
+  const upkeep = businessMod.businessDailyUpkeep(sim.business);
+  if (upkeep <= 0) throw new Error('upkeep should be positive');
+  if (!(sim.cash < cashPreUp)) throw new Error('daily upkeep should debit cash');
+
+  // upgrade: level naik, income naik, value = modal (beli + upgrade), net-worth-neutral juga
+  const inst = getBusiness(sim.business, 'coffee');
+  if (!inst) throw new Error('should own coffee');
+  const def = businessDef('coffee')!;
+  const upCost = upgradeCost(def, inst.level);
+  sim.cash = 100_000;
+  const eqPreUp = equity(sim);
+  const cashPreUpg = sim.cash;
+  const up = upgradeBusiness(sim, 'coffee');
+  if (!up.ok) throw new Error('upgrade failed: ' + up.msg);
+  if (inst.level !== 2) throw new Error('level should be 2');
+  if (sim.cash !== cashPreUpg - upCost) throw new Error('cash should drop by upgrade cost');
+  const eqPostUp = equity(sim);
+  if (Math.abs(eqPostUp - eqPreUp) > 1) throw new Error('upgrade must be net-worth-neutral');
+  if (businessIncomePerTick(sim.business) <= inc) throw new Error('upgrade should raise income');
+  if (businessValueOf(def, 2) <= businessValueOf(def, 1)) throw new Error('value should rise with level');
+
+  // max level cap
+  inst.level = def.maxLevel;
+  if (upgradeBusiness(sim, 'coffee').ok) throw new Error('max-level upgrade should fail');
+
+  // normalize: buang id asing, clamp level
+  const norm = businessMod.normalizeBusiness({ owned: [{ id: 'ghost', level: 9 }, { id: 'foodtruck', level: 99 }], lastUpkeepTick: 5 }, 100);
+  if (norm.owned.length !== 1 || norm.owned[0].id !== 'foodtruck' || norm.owned[0].level !== 3)
+    throw new Error('normalizeBusiness should drop unknown ids and clamp level');
+
+  console.log(
+    'business buy net-neutral: ok | income/tick:', inc.toFixed(2),
+    '| upkeep/day:', upkeep.toFixed(0),
+    '| upgrade L2 cost:', upCost,
+    '| value L2:', businessValueOf(def, 2)
+  );
+}
+
+// ---------- Phase 3b: CT Feed (prosedural dari state sim beneran) ----------
+{
+  const sim = freshSim();
+  const feed = feedMod.createFeed();
+  sim.feed = feed;
+
+  // paksa ada event di feed supaya kandidat 'event' tersedia
+  const rng = new RNG(42);
+  const pend = generateEvent(sim, rng);
+  if (pend) applyEvent(sim, pend);
+
+  // jalanin banyak tick feed → harus ada post yang ke-generate
+  for (let i = 0; i < 400 && feed.posts.length < 3; i++) feedMod.feedTick(sim, rng);
+
+  if (feed.posts.length === 0) throw new Error('feed should generate posts over time');
+
+  // setiap post harus refer state nyata: teks non-kosong, penulis bot beneran atau 'you'
+  for (const p of feed.posts) {
+    if (!p.text || !p.text.trim()) throw new Error('post text must not be empty');
+    if (p.authorId !== 'you' && !sim.bots.some((b) => b.id === p.authorId))
+      throw new Error('post author must be a real bot: ' + p.authorId);
+  }
+
+  // post event harus nyangkut ke event beneran (lastEventId ke-set & unik per event)
+  if (feed.lastEventId && !sim.events.some((e) => e.id === feed.lastEventId))
+    throw new Error('lastEventId must reference a real event');
+
+  // post 'Kamu' dari aksi pemain
+  const before = feed.posts.length;
+  feedMod.feedFromYou(sim, 'Beli Kedai Kopi. Cashflow jalan.', 'Bisnis');
+  if (feed.posts.length !== before + 1) throw new Error('feedFromYou should push a post');
+  if (feed.posts[0].authorId !== 'you' || feed.posts[0].kind !== 'you') throw new Error('player post mis-tagged');
+
+  // cooldown: jenis yang sama nggak boleh ngepost beruntun
+  const evPosts = feed.posts.filter((p) => p.kind === 'event');
+  if (evPosts.length > 1) {
+    for (let i = 1; i < evPosts.length; i++) {
+      if (evPosts[i].t === evPosts[i - 1].t) throw new Error('same-kind posts must respect cooldown');
+    }
+  }
+
+  // normalize: buang post rusak, jaga struktur
+  const norm = feedMod.normalizeFeed({
+    posts: [{ id: 'a', t: 1, kind: 'event', authorId: 'bot_0', name: 'Aria', emoji: '🤖', text: 'ok', tag: null }, { id: '', text: '' }],
+    seq: 'x',
+    lastByKind: { event: '3' },
+    lastEventId: 7
+  });
+  if (norm.posts.length !== 1 || norm.seq !== 1 || norm.lastByKind['event'] !== 3 || norm.lastEventId !== null)
+    throw new Error('normalizeFeed should drop invalid posts/scalars');
+
+  console.log(
+    'feed posts:', feed.posts.length,
+    '| kinds:', [...new Set(feed.posts.map((p) => p.kind))].join(','),
+    '| example:', feed.posts.find((p) => p.kind !== 'you')?.text.slice(0, 52),
+    '| player post: ok | normalize: ok'
+  );
+}
+
+// ---------- Phase 5: perks (fee, cooldown ngobrol, rumor) ----------
+{
+  const sim = freshSim();
+  const { perksOf, feeMultOf, activePerks, perkHint } = perksMod;
+
+  // tanpa aset → netral
+  const bare = perksOf(sim);
+  if (bare.feeDiscount !== 0 || bare.chatCooldownCut !== 0 || bare.rumorChanceMult !== 1 || bare.rumorTierBonus !== 0)
+    throw new Error('perks must be neutral when nothing owned');
+  if (feeMultOf(sim) !== 1) throw new Error('feeMult must be 1 with no perks');
+
+  // fee beneran lebih murah: mansion (−15%)
+  const inst = sim.instruments['BN'];
+  const feeBase = estimateFillPrice(inst, 'buy', 10, settings).fee;
+  sim.lifestyle.owned.push('mansion');
+  const feePerk = estimateFillPrice(inst, 'buy', 10, settings, feeMultOf(sim)).fee;
+  if (!(feePerk < feeBase)) throw new Error('mansion perk must reduce fee');
+  if (Math.abs(feePerk / feeBase - 0.85) > 1e-9) throw new Error('mansion fee discount should be 15%');
+
+  // semua sumber numpuk (mansion 15 + jet 5 + island 25 = 45%), cap 50%
+  sim.lifestyle.owned.push('jet', 'island'); // jet −5% + island −25%
+  const p = perksOf(sim);
+  if (Math.abs(p.feeDiscount - 0.45) > 1e-9) throw new Error('fee discounts should stack to 45%, got ' + p.feeDiscount);
+  if (Math.abs(feeMultOf(sim) - 0.55) > 1e-9) throw new Error('feeMult should be 0.55');
+  if (p.rumorChanceMult !== 2) throw new Error('jet should double rumor chance');
+  if (p.rumorTierBonus !== 1) throw new Error('island should add rumor tier');
+  if (Math.round(p.chatCooldownCut) !== 0) throw new Error('no cooldown perk owned yet');
+
+  // bikin milik yacht+watch biar cooldown kepotong
+  sim.lifestyle.owned.push('yacht', 'watch'); // 3 + 1 = 4, dari base 6 → gap 2
+  sim.social.lastChat['bot_0'] = sim.ticks;
+  const wait = socialMod.chatCooldownLeft(sim, 'bot_0');
+  if (wait !== 2) throw new Error('perk should cut chat cooldown, got ' + wait);
+
+  // fee cap: tambah bank (bisnis −8%) → 53% > cap, harus tetap 50%
+  sim.business.owned.push({ id: 'bank', level: 1 });
+  if (feeMultOf(sim) !== 0.5) throw new Error('feeMult must stay capped at 50%, got ' + feeMultOf(sim));
+
+  // perkHint & activePerks
+  if (!perkHint('asset', 'mansion')?.includes('15')) throw new Error('perkHint should describe fee discount');
+  if (perkHint('asset', 'house_basic') !== null) throw new Error('non-perk asset should have no hint');
+  const act = activePerks(sim);
+  if (act.length < 3) throw new Error('activePerks should list fee/rumor perks: ' + act.length);
+  if (!act.some((x) => x.text.includes('50%'))) throw new Error('activePerks should show capped fee discount');
+
+  // rumor tier bonus: friendship tier 2 + bonus 1 → tier 3 pas ngobrol
+  sim.social.friendship['bot_0'] = 55; // tier 2
+  sim.social.lastChat['bot_0'] = sim.ticks - 999;
+  const origRandom = Math.random;
+  Math.random = () => 0;
+  const chat = socialMod.chatWith(sim, 'bot_0');
+  Math.random = origRandom;
+  if (!chat.rumor || !sim.social.rumor || sim.social.rumor.tier !== 3)
+    throw new Error('island perk should bump rumor tier 2 → 3, got tier ' + sim.social.rumor?.tier);
+
+  console.log(
+    'perk fee: 100% →', Math.round(feeMultOf(sim) * 100) + '%',
+    '| cooldown 6 →', wait + 'j',
+    '| rumor tier bonus: ok',
+    '| active perks:', act.map((x) => x.name).join(', ')
+  );
+}
+
+// ---------- Phase 6: fame, mention parser, dan pengaruh post ----------
+{
+  const sim = freshSim();
+  const { normalizeProfile, publishPost, postCooldownLeft, toggleFollow, profileTick, INFLUENCE_THRESHOLD } = profileMod;
+
+  // universe punya koin Weekend (WKND) buat contoh "have fun on weekend!"
+  if (!sim.instruments['WKND']) throw new Error('WKND weekend memecoin should exist in universe');
+
+  // ---- parser: teks bebas → instrumen ----
+  const m1 = parseMention(sim, 'have fun on weekend!');
+  if (!m1 || m1.instId !== 'WKND') throw new Error('"weekend" should resolve to WKND, got ' + m1?.instId);
+
+  const m2 = parseMention(sim, 'wknd to the moon');
+  if (!m2 || m2.instId !== 'WKND') throw new Error('"wknd" (kode/tick) should resolve to WKND, got ' + m2?.instId);
+
+  const m3 = parseMention(sim, 'gas $WKND siapa gaet duluan');
+  if (!m3 || m3.instId !== 'WKND') throw new Error('"$WKND" should resolve to WKND, got ' + m3?.instId);
+
+  const m4 = parseMention(sim, 'selamat hari libur semua');
+  if (m4 !== null) throw new Error('unrelated text should not mention anything, got ' + m4.instId);
+
+  // ---- konteks posisi: kelas "memecoin" resolve ke yang lo pegang ----
+  sim.spotHoldings['DGE'] = { instId: 'DGE', qty: 1000, avgCost: 0.1, openedAt: sim.simTime };
+  const m5 = parseMention(sim, 'menurut gua memecoin lagi enak');
+  if (!m5 || m5.instId !== 'DGE') throw new Error('class "memecoin" should resolve to held coin DGE, got ' + m5?.instId);
+  if (mentionsHeldCoin(sim, 'menurut gua memecoin lagi enak') !== 'DGE')
+    throw new Error('mentionsHeldCoin should return held coin');
+  if (mentionsHeldCoin(sim, 'weekend keren') !== null)
+    throw new Error('WKND is not held → should not count as held mention');
+
+  // ---- publish post ----
+  const p0 = { ...sim.profile };
+  const bad = publishPost(sim, '   ');
+  if (bad.ok) throw new Error('empty post should be rejected');
+  const res = publishPost(sim, 'have fun on weekend!');
+  if (!res.ok) throw new Error('publish failed: ' + res.msg);
+  if (res.mentionTag !== 'WKND') throw new Error('post should tag WKND, got ' + res.mentionTag);
+
+  const post = sim.feed.posts[0];
+  if (post.mention !== 'WKND' || post.tag !== 'WKND') throw new Error('feed post should carry mention');
+  if (post.likes <= 0) throw new Error('post should get likes');
+  if (post.reactions.length < 2) throw new Error('post should get audience reactions');
+  if (sim.profile.followers <= p0.followers) throw new Error('followers should grow after engaged post');
+  if (sim.profile.posts !== p0.posts + 1) throw new Error('post count should increment');
+
+  // cooldown ngepost
+  if (postCooldownLeft(sim) <= 0) throw new Error('post cooldown should engage');
+  if (publishPost(sim, 'spam lagi').ok) throw new Error('second post inside cooldown should fail');
+
+  // ---- publik sebagian: AI tau lo pegang koin yang lo sebut ----
+  // DGE dipegang → post soal DGE harus menghasilkan reaksi yang ngebahas posisi.
+  // Math.random di-pin biar reactor-nya deterministik: bot_0 (momentum) + bot_1 (contrarian).
+  sim.ticks += 99; // lewatin cooldown
+  const origRandom2 = Math.random;
+  Math.random = () => 0;
+  const res2 = publishPost(sim, 'dogicoin best coin, gua ajak semua');
+  Math.random = origRandom2;
+  if (!res2.ok) throw new Error('publish 2 failed: ' + res2.msg);
+  const post2 = sim.feed.posts[0];
+  if (post2.mention !== 'DGE') throw new Error('post 2 should mention DGE, got ' + post2.mention);
+  if (!post2.reactions.every((r) => r.text.includes('$DGE')))
+    throw new Error('audience should react to the mentioned coin: ' + post2.reactions.map((r) => r.text).join(' | '));
+  // kontrarian tau posisi publik lo → nyebut "nyangkut"
+  if (!post2.reactions.some((r) => r.text.includes('nyangkut')))
+    throw new Error('reaction should acknowledge public position: ' + post2.reactions.map((r) => r.text).join(' | '));
+
+  // ---- efek influencer: follower cukup → hype koin naik ----
+  sim.ticks += 99;
+  sim.profile.followers = INFLUENCE_THRESHOLD;
+  const inst = sim.instruments['WKND'];
+  const hypeBefore = inst.hype;
+  const res3 = publishPost(sim, 'weekend is a lifestyle, $WKND no cap');
+  if (!res3.ok) throw new Error('publish 3 failed: ' + res3.msg);
+  if (!(inst.hype > hypeBefore)) throw new Error('influential post should raise hype');
+
+  // ---- following ----
+  const bot = sim.bots[0];
+  const f1 = toggleFollow(sim, bot.id);
+  if (!f1.ok || !sim.profile.following.includes(bot.id)) throw new Error('follow should add to following');
+  if ((sim.social.friendship[bot.id] ?? 0) < 3) throw new Error('follow should grant friendship');
+  const f2 = toggleFollow(sim, bot.id);
+  if (!f2.ok || sim.profile.following.includes(bot.id)) throw new Error('unfollow should remove from following');
+
+  // ---- pertumbuhan harian ----
+  const fBefore = sim.profile.followers;
+  sim.ticks = Math.ceil(sim.ticks / 24) * 24;
+  profileTick(sim);
+  if (sim.profile.followers < fBefore) throw new Error('daily growth must not lose followers');
+
+  // ---- normalize ----
+  const norm = normalizeProfile({ followers: -5, following: ['bot_0', 'bot_0', 7], fame: 500, lastPostTick: 'x', lifetimeLikes: '9', posts: null });
+  if (norm.followers !== 0 || norm.following.length !== 1 || norm.fame !== 100 || norm.lastPostTick !== -999)
+    throw new Error('normalizeProfile should clamp/sanitize');
+
+  console.log(
+    'mention: weekend→', m1.instId, '| wknd→', m2.instId, '| class→', m5.instId,
+    '| post likes:', post.likes, '| followers:', sim.profile.followers,
+    '| reaction:', post2.reactions[0].text.slice(0, 40),
+    '| hype bump: ok | follow: ok'
+  );
+}
+
+// ---------- Phase 7: populasi 300 orang + timeline CT ala X ----------
+{
+  // ---- populasi kota ----
+  const bots = createBots(settings.startingCash);
+  if (bots.length !== TOTAL_BOTS) throw new Error(`should create ${TOTAL_BOTS} bots, got ${bots.length}`);
+  if (bots[0].name !== 'Aria' || bots[9].name !== 'Sinta') throw new Error('NPC roster should come first');
+  const handles = new Set(bots.map((b) => b.handle));
+  if (handles.size !== bots.length) throw new Error('every handle must be unique');
+  if (bots.some((b) => !b.handle || !Number.isFinite(b.followers) || b.followers <= 0))
+    throw new Error('every bot needs handle + followers');
+  if (bots[NPC_COUNT].id !== `bot_${NPC_COUNT}`) throw new Error('crowd ids should continue after NPCs');
+  if (bots.some((b, i) => i >= NPC_COUNT && b.equity !== settings.startingCash))
+    throw new Error('crowd should start with starting cash');
+
+  // save lama (cuma NPC) → di-grow sampe penuh, data lama dipertahankan
+  const old = createBots(50000).slice(0, NPC_COUNT);
+  old[0].cash = 12345;
+  old[0].handle = ''; // save tanpa handle (versi sebelum Phase 7)
+  const grown = growBots(old, 100000);
+  if (grown.length !== TOTAL_BOTS) throw new Error('growBots should top up to total population');
+  if (grown[0].cash !== 12345) throw new Error('growBots must preserve existing bot state');
+  if (!grown[0].handle) throw new Error('growBots should heal missing handle');
+  if (!grown[0].followers || grown[0].followers <= 0) throw new Error('growBots should heal missing followers');
+
+  // ---- feed: engagement, media, obrolan kerumun ----
+  const sim = freshSim();
+  const rng = new RNG(777);
+  for (let i = 0; i < 600; i++) {
+    sim.ticks += 1;
+    feedMod.feedTick(sim, rng);
+  }
+  const posts = sim.feed.posts;
+  if (posts.length < 5) throw new Error('feed should be busy with 300 people, got ' + posts.length);
+  for (const p of posts) {
+    if (!p.handle) throw new Error('post missing handle: ' + p.id);
+    if (!Number.isFinite(p.likes) || p.likes < 1) throw new Error('post should carry engagement: ' + p.id);
+    if (!Number.isFinite(p.replies) || p.replies < 0) throw new Error('post replies invalid');
+  }
+  if (!posts.some((p) => p.kind === 'chat')) throw new Error('crowd should post casual chatter');
+  if (!posts.some((p) => p.media !== null)) throw new Error('some posts should carry media');
+
+  // ---- like / repost ala X ----
+  const target = posts[0];
+  const l0 = target.likes;
+  feedMod.toggleLike(sim, target.id);
+  if (!target.liked || target.likes !== l0 + 1) throw new Error('like should increment');
+  feedMod.toggleLike(sim, target.id);
+  if (target.liked || target.likes !== l0) throw new Error('unlike should restore');
+  const r0 = target.reposts;
+  feedMod.toggleRepost(sim, target.id);
+  if (!target.reposted || target.reposts !== r0 + 1) throw new Error('repost should increment');
+  feedMod.toggleRepost(sim, target.id);
+  if (target.reposted || target.reposts !== r0) throw new Error('undo repost should restore');
+
+  // ---- post pemain: mention → auto nempel chart; media eksplisit dihormati ----
+  const sim2 = freshSim();
+  const res1 = profileMod.publishPost(sim2, 'have fun on weekend!');
+  if (!res1.ok) throw new Error('publish failed: ' + res1.msg);
+  const p1 = sim2.feed.posts[0];
+  if (p1.media?.kind !== 'chart' || p1.media.instId !== 'WKND')
+    throw new Error('mention post should auto-attach WKND chart, got ' + JSON.stringify(p1.media));
+  if (!p1.handle || p1.handle !== 'kamu') throw new Error('player post handle should be kamu');
+
+  sim2.ticks += 99;
+  const res2 = profileMod.publishPost(sim2, 'sore hari enaknya ngopi', { kind: 'art', seed: 'x', emoji: '🌆' });
+  if (!res2.ok) throw new Error('publish 2 failed: ' + res2.msg);
+  const p2 = sim2.feed.posts[0];
+  if (p2.media?.kind !== 'art' || p2.media.emoji !== '🌆')
+    throw new Error('explicit art media should be kept');
+
+  // ---- normalize: post lama (sebelum Phase 7) → field baru di-heal ----
+  const norm = feedMod.normalizeFeed({
+    posts: [{ id: 'a', t: 1, kind: 'mover', authorId: 'bot_0', name: 'Aria', emoji: '🤖', text: 'ok', tag: null }],
+    seq: 1,
+    lastByKind: {},
+    lastEventId: null
+  });
+  const np = norm.posts[0];
+  if (np.handle !== 'ct' || np.media !== null || np.liked !== false || np.reposts !== 0 || np.replies !== 0 || np.replyTo !== null)
+    throw new Error('normalizeFeed should heal old posts with new social fields');
+
+  console.log(
+    'population:', bots.length, '| NPC:', NPC_COUNT, '| unique handles: ok',
+    '| feed posts:', posts.length, '| kinds:', [...new Set(posts.map((p) => p.kind))].join(','),
+    '| media: ok | like/repost: ok | auto-chart WKND: ok | normalize: ok'
   );
 }

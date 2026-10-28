@@ -55,6 +55,7 @@ export const CRYPTO_SEEDS: NamedSeed[] = [
 ];
 
 export const MEME_SEEDS: NamedSeed[] = [
+  { real: 'Weekend', fake: 'Weekend', ticker: 'WKND', cls: 'meme', tag: 'Meme', cap: 5.4e8, price: 0.0042, vol: 0.115 },
   { real: 'Dogecoin', fake: 'Dogicoin', ticker: 'DGE', cls: 'meme', tag: 'Meme', cap: 1.6e10, price: 0.135, vol: 0.07 },
   { real: 'Shiba Inu', fake: 'Shibainu', ticker: 'SHB', cls: 'meme', tag: 'Meme', cap: 1.1e10, price: 0.0000185, vol: 0.085 },
   { real: 'Pepe', fake: 'Pepeu', ticker: 'PEP', cls: 'meme', tag: 'Meme', cap: 4.6e9, price: 0.0000092, vol: 0.1 },

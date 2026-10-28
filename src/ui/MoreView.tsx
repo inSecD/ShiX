@@ -5,6 +5,8 @@ const ITEMS: { tab: Tab; icon: string; title: string; desc: string }[] = [
   { tab: 'news', icon: '📰', title: 'Berita', desc: 'Headline makro, whale, dan event pasar' },
   { tab: 'launchpad', icon: '🚀', title: 'Launchpad', desc: 'Luncurkan token, bonding curve, cek rug risk' },
   { tab: 'modes', icon: '🎯', title: 'Skenario & Misi', desc: 'Misi latihan berhadiah + skenario pasar' },
+  { tab: 'lifestyle', icon: '🏙️', title: 'Gaya Hidup', desc: 'Beli properti, kendaraan, dan koleksi' },
+  { tab: 'hub', icon: '🚶', title: 'Jalan-jalan', desc: 'Jelajahi kota & properti yang lo punya' },
   { tab: 'settings', icon: '⚙️', title: 'Setelan & Tantangan', desc: 'Seed dunia, modal, save/load, daily challenge' },
   { tab: 'trade', icon: '⚡', title: 'Trade Klasik', desc: 'Chart penuh + order ticket dalam satu layar' }
 ];

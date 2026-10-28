@@ -3,6 +3,7 @@ import { useStore } from '../store';
 import { ChartView } from './ChartView';
 import { marketOpen } from '../sim/engine';
 import { depthUsd, estimateFillPrice, isSpotable, liquidationPrice } from '../sim/trading';
+import { feeMultOf } from '../sim/perks';
 import { fmtPct, fmtPrice, fmtQty, fmtUsd } from '../lib/format';
 import { SpotTicket } from './SpotTicket';
 import type { OrderType } from '../sim/types';
@@ -73,7 +74,7 @@ export function TradePanel({ embedded = false }: { embedded?: boolean }) {
   const usd = Math.max(0, parseFloat(amount) || 0);
   const refPx = type === 'limit' && limitPx ? parseFloat(limitPx) : inst.price;
   const qty = refPx > 0 ? usd / refPx : 0;
-  const est = estimateFillPrice(inst, side === 'long' ? 'buy' : 'sell', qty, settings);
+  const est = estimateFillPrice(inst, side === 'long' ? 'buy' : 'sell', qty, settings, feeMultOf(sim));
   const notional = qty * est.price;
   const margin = notional / lev;
   const liq = liquidationPrice(est.price, lev, side);

@@ -1,6 +1,6 @@
 import { RNG } from './rng';
 import { buildUniverse, CURRENCY_MAP } from './universe';
-import { clamp, rollEvent } from './events';
+import { clamp, applyEvent, generateEvent } from './events';
 import {
   applyFill,
   closePosition,
@@ -11,6 +11,13 @@ import {
 import { spawnAiToken, tickTokens } from './launchpad';
 import { createBots, tickBots } from './bots';
 import { createWorld, worldAssetsValue, worldTick } from './world';
+import { createLifestyle, lifestyleAssetsValue, lifestyleTick } from './lifestyle';
+import { createHub } from './hub';
+import { createSocial } from './social';
+import { businessesValue, businessTick, createBusiness } from './business';
+import { createFeed, feedTick } from './feed';
+import { feeMultOf } from './perks';
+import { createProfile, profileTick } from './profile';
 import type { AssetClass, Candle, Fill, Instrument, Position, Settings, SimState } from './types';
 
 export const HOUR = 3_600_000;
@@ -180,7 +187,14 @@ export function createSim(settings: Settings): SimState {
     challenge: null,
     notices: [],
     progress: {},
-    world: createWorld(settings.seed)
+    world: createWorld(settings.seed),
+    lifestyle: createLifestyle(),
+    hub: createHub(),
+    business: createBusiness(),
+    social: createSocial(),
+    feed: createFeed(),
+    profile: createProfile(),
+    pendingEvent: null
   };
 
   for (let i = 0; i < 72; i++) tick(state, settings, true);
@@ -202,10 +216,16 @@ export function tick(state: SimState, settings: Settings, warmup = false): void 
   updateMacro(state, rng);
 
   if (state.simTime >= state.nextEventAt) {
-    rollEvent(state, rng);
+    if (state.pendingEvent) {
+      applyEvent(state, state.pendingEvent);
+      state.pendingEvent = null;
+      if (state.social.rumor) state.social.rumor = null; // rumor terkonfirmasi → jadi berita
+    }
     const evMult = settings.difficulty === 'easy' ? 1.7 : settings.difficulty === 'brutal' ? 0.55 : 1;
     state.nextEventAt = state.simTime + rng.int(1, 12) * HOUR * evMult;
   }
+  // selalu siapkan event berikutnya biar bisa dibocorkan sebagai rumor (Fase 3)
+  if (!state.pendingEvent) state.pendingEvent = generateEvent(state, rng);
 
   for (const id of state.order) {
     const inst = state.instruments[id];
@@ -214,6 +234,10 @@ export function tick(state: SimState, settings: Settings, warmup = false): void 
   }
 
   const worldNews = worldTick(state.world, state);
+  lifestyleTick(state);
+  businessTick(state);
+  feedTick(state, rng);
+  profileTick(state);
   if (!warmup) {
     for (const ev of worldNews.slice(0, 2)) {
       state.events.unshift({
@@ -452,7 +476,7 @@ function processOrders(state: SimState, settings: Settings, rng: RNG): void {
 
     const fillFrac = clamp(0.3 + inst.liquidity * 0.85, 0.15, 1) * rng.float(0.55, 1);
     let qty = remaining * fillFrac;
-    const feeRate = settings.feeMaker;
+    const feeRate = settings.feeMaker * feeMultOf(state);
     const price = o.side === 'buy' ? Math.min(limit, inst.price) : Math.max(limit, inst.price);
     const affordable = Math.max(0, ((state.cash - qty * price * feeRate) * o.lev) / price);
     if (affordable < qty) qty = affordable;
@@ -537,7 +561,7 @@ function closeBracket(
   const inst = state.instruments[pos.instId];
   if (!inst) return;
   const side = pos.side === 'long' ? 'sell' : 'buy';
-  const est = estimateFillPrice(inst, side, pos.qty, settings);
+  const est = estimateFillPrice(inst, side, pos.qty, settings, feeMultOf(state));
   const dir = pos.side === 'long' ? 1 : -1;
   const movePct = pos.entry > 0 ? ((est.price - pos.entry) / pos.entry) * 100 * dir : 0;
   const res = closePosition(state, pos.id, pos.qty, est.price, est.fee, kind as Fill['kind'], label);
@@ -652,7 +676,9 @@ export function equity(state: SimState): number {
     state.locked +
     unrealizedPnl(state) +
     spotValue(state) +
-    worldAssetsValue(state.world)
+    worldAssetsValue(state.world) +
+    lifestyleAssetsValue(state.lifestyle) +
+    businessesValue(state.business)
   );
 }
 
@@ -687,6 +713,6 @@ export function estimateOrderFill(
 ): { price: number; fee: number; slippage: number } {
   const inst = state.instruments[instId];
   if (!inst) return { price: 0, fee: 0, slippage: 0 };
-  const est = estimateFillPrice(inst, side, qty, settings);
+  const est = estimateFillPrice(inst, side, qty, settings, feeMultOf(state));
   return { price: est.price, fee: est.fee, slippage: est.slippage };
 }
