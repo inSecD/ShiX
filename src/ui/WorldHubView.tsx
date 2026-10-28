@@ -51,6 +51,14 @@ interface MarkerHit {
   unlocked: boolean;
 }
 
+/** "3j lalu" dari selisih milidetik */
+function fmtAgo(deltaMs: number): string {
+  const h = Math.floor(deltaMs / 3_600_000);
+  if (h < 1) return 'baru saja';
+  if (h < 24) return `${h}j lalu`;
+  return `${Math.floor(h / 24)}h lalu`;
+}
+
 export function WorldHubView() {
   const sim = useStore((s) => s.sim);
   const hubGoto = useStore((s) => s.hubGoto);
@@ -67,6 +75,7 @@ export function WorldHubView() {
   const current = LOCATION_BY_ID[locId] ?? LOCATION_BY_ID['street'];
   const npcs = npcsAtLocation(sim, locId);
   const social = sim.social;
+  const feed = sim.feed;
   const convo = social.lastConvo;
   const activeRumor = social.rumor;
   const rumorBot = activeRumor ? sim.bots.find((b) => b.id === activeRumor.botId) : null;
@@ -384,6 +393,31 @@ export function WorldHubView() {
         <div className="hub-map" ref={wrapRef}>
           <canvas ref={canvasRef} className="hub-canvas" onPointerDown={onPointer} />
           <div className="hub-hint">Tap pin buat jalan ke lokasi</div>
+        </div>
+      </div>
+
+      <div className="panel">
+        <div className="panel-head">
+          <span>🐦 CT Feed</span>
+          <span className="badge">{feed.posts.length} post</span>
+        </div>
+        <div className="panel-body ct-feed">
+          {feed.posts.slice(0, 20).map((p) => (
+            <div className={`ct-post${p.authorId === 'you' ? ' you' : ''}`} key={p.id}>
+              <span className="ct-ico">{p.emoji}</span>
+              <div className="ct-copy">
+                <div className="ct-head">
+                  <b>{p.name}</b>
+                  {p.tag && <span className="ct-tag">${p.tag}</span>}
+                  <span className="ct-time">{fmtAgo(sim.simTime - p.t)}</span>
+                </div>
+                <div className="ct-text">{p.text}</div>
+              </div>
+            </div>
+          ))}
+          {feed.posts.length === 0 && (
+            <div className="tiny muted">Belum ada yang posting. Biarin sim jalan dulu…</div>
+          )}
         </div>
       </div>
 

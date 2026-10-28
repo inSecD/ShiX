@@ -2828,3 +2828,70 @@ input[type='range']::-webkit-slider-thumb {
   line-height: 1.5;
   color: var(--warn);
 }
+
+/* ---------- CT Feed (Fase 3b) ---------- */
+.ct-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ct-post {
+  display: flex;
+  gap: 10px;
+  padding: 8px 10px;
+  background: #0c111b;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.ct-post.you {
+  border-left: 2px solid var(--accent);
+}
+
+.ct-ico {
+  font-size: 20px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #10182a;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+
+.ct-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ct-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.ct-head b {
+  font-size: 12px;
+}
+
+.ct-tag {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--accent);
+}
+
+.ct-time {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--dim2);
+  flex: 0 0 auto;
+}
+
+.ct-text {
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-word;
+}

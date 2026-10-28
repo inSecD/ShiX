@@ -159,6 +159,27 @@ export interface SocialState {
   lastConvo: ConvoState | null;
 }
 
+/** satu post di CT Feed — dibikin prosedural dari kejadian sim beneran */
+export interface FeedPost {
+  id: string;
+  t: number;
+  kind: 'event' | 'mover' | 'hype' | 'rumor' | 'you';
+  authorId: string;
+  name: string;
+  emoji: string;
+  text: string;
+  tag: string | null;
+}
+
+export interface FeedState {
+  posts: FeedPost[];
+  seq: number;
+  /** kapan terakhir tiap jenis ngepost (tick) — buat cooldown anti-spam */
+  lastByKind: Record<string, number>;
+  /** id event terakhir yang udah diambil reaksinya, biar nggak dobel */
+  lastEventId: string | null;
+}
+
 export interface LaunchToken {
   id: string;
   name: string;
@@ -305,5 +326,6 @@ export interface SimState {
   hub: HubState;
   business: BusinessState;
   social: SocialState;
+  feed: FeedState;
   pendingEvent: PendingEvent | null;
 }

@@ -25,6 +25,7 @@ import {
 } from './sim/world';
 import { buyAsset, normalizeLifestyle, sellAsset } from './sim/lifestyle';
 import { buyBusiness, normalizeBusiness, upgradeBusiness } from './sim/business';
+import { feedFromYou, normalizeFeed } from './sim/feed';
 import { LOCATION_BY_ID, isLocationUnlocked, locationHint, normalizeHub } from './sim/hub';
 import { chatWith, normalizeSocial } from './sim/social';
 import { clearState, loadState, saveState } from './lib/persist';
@@ -161,6 +162,7 @@ function normalizeSim(sim: SimState, startingCash: number): SimState {
   sim.hub = normalizeHub(sim.hub);
   sim.business = normalizeBusiness(sim.business, sim.ticks);
   sim.social = normalizeSocial(sim.social);
+  sim.feed = normalizeFeed(sim.feed);
   sim.pendingEvent = null;
   for (const [id, holding] of Object.entries(sim.spotHoldings)) {
     if (
@@ -723,6 +725,7 @@ export const useStore = create<Store>((set, get) => ({
     const { sim, notify } = get();
     const res = buyAsset(sim, assetId);
     notify(res.msg, res.ok ? 'ok' : 'err');
+    if (res.ok) feedFromYou(sim, `${res.msg} Flex sekali, terus gas trading lagi.`, 'Lifestyle');
     set((s) => ({ v: s.v + 1 }));
   },
 
@@ -737,6 +740,7 @@ export const useStore = create<Store>((set, get) => ({
     const { sim, notify } = get();
     const res = buyBusiness(sim, businessId);
     notify(res.msg, res.ok ? 'ok' : 'err');
+    if (res.ok) feedFromYou(sim, `${res.msg}. Cashflow jalan tiap jam sekarang.`, 'Bisnis');
     set((s) => ({ v: s.v + 1 }));
   },
 
@@ -744,6 +748,7 @@ export const useStore = create<Store>((set, get) => ({
     const { sim, notify } = get();
     const res = upgradeBusiness(sim, businessId);
     notify(res.msg, res.ok ? 'ok' : 'err');
+    if (res.ok) feedFromYou(sim, `${res.msg}. Expand terus.`, 'Bisnis');
     set((s) => ({ v: s.v + 1 }));
   },
 

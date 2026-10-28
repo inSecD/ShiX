@@ -24,6 +24,7 @@ import * as lifestyleMod from '../src/sim/lifestyle';
 import * as hubMod from '../src/sim/hub';
 import * as socialMod from '../src/sim/social';
 import * as businessMod from '../src/sim/business';
+import * as feedMod from '../src/sim/feed';
 import { applyEvent, generateEvent } from '../src/sim/events';
 import { RNG } from '../src/sim/rng';
 
@@ -597,5 +598,64 @@ function openLong(sim: SimState) {
     '| upkeep/day:', upkeep.toFixed(0),
     '| upgrade L2 cost:', upCost,
     '| value L2:', businessValueOf(def, 2)
+  );
+}
+
+// ---------- Phase 3b: CT Feed (prosedural dari state sim beneran) ----------
+{
+  const sim = freshSim();
+  const feed = feedMod.createFeed();
+  sim.feed = feed;
+
+  // paksa ada event di feed supaya kandidat 'event' tersedia
+  const rng = new RNG(42);
+  const pend = generateEvent(sim, rng);
+  if (pend) applyEvent(sim, pend);
+
+  // jalanin banyak tick feed → harus ada post yang ke-generate
+  for (let i = 0; i < 400 && feed.posts.length < 3; i++) feedMod.feedTick(sim, rng);
+
+  if (feed.posts.length === 0) throw new Error('feed should generate posts over time');
+
+  // setiap post harus refer state nyata: teks non-kosong, penulis bot beneran atau 'you'
+  for (const p of feed.posts) {
+    if (!p.text || !p.text.trim()) throw new Error('post text must not be empty');
+    if (p.authorId !== 'you' && !sim.bots.some((b) => b.id === p.authorId))
+      throw new Error('post author must be a real bot: ' + p.authorId);
+  }
+
+  // post event harus nyangkut ke event beneran (lastEventId ke-set & unik per event)
+  if (feed.lastEventId && !sim.events.some((e) => e.id === feed.lastEventId))
+    throw new Error('lastEventId must reference a real event');
+
+  // post 'Kamu' dari aksi pemain
+  const before = feed.posts.length;
+  feedMod.feedFromYou(sim, 'Beli Kedai Kopi. Cashflow jalan.', 'Bisnis');
+  if (feed.posts.length !== before + 1) throw new Error('feedFromYou should push a post');
+  if (feed.posts[0].authorId !== 'you' || feed.posts[0].kind !== 'you') throw new Error('player post mis-tagged');
+
+  // cooldown: jenis yang sama nggak boleh ngepost beruntun
+  const evPosts = feed.posts.filter((p) => p.kind === 'event');
+  if (evPosts.length > 1) {
+    for (let i = 1; i < evPosts.length; i++) {
+      if (evPosts[i].t === evPosts[i - 1].t) throw new Error('same-kind posts must respect cooldown');
+    }
+  }
+
+  // normalize: buang post rusak, jaga struktur
+  const norm = feedMod.normalizeFeed({
+    posts: [{ id: 'a', t: 1, kind: 'event', authorId: 'bot_0', name: 'Aria', emoji: '🤖', text: 'ok', tag: null }, { id: '', text: '' }],
+    seq: 'x',
+    lastByKind: { event: '3' },
+    lastEventId: 7
+  });
+  if (norm.posts.length !== 1 || norm.seq !== 1 || norm.lastByKind['event'] !== 3 || norm.lastEventId !== null)
+    throw new Error('normalizeFeed should drop invalid posts/scalars');
+
+  console.log(
+    'feed posts:', feed.posts.length,
+    '| kinds:', [...new Set(feed.posts.map((p) => p.kind))].join(','),
+    '| example:', feed.posts.find((p) => p.kind !== 'you')?.text.slice(0, 52),
+    '| player post: ok | normalize: ok'
   );
 }
