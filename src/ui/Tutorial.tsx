@@ -14,7 +14,7 @@ const STEPS: Step[] = [
     id: 'welcome',
     title: 'Selamat datang di ShiX 👋',
     body:
-      'Lo lagi dikasih akun simulasi buat jadi trader. Semua harga di sini fiksi. Ikutin tour singkat ini — ' +
+      'Lo lagi dikasih akun gratis buat jadi trader. Semua harga di sini fiksi. Ikutin tour singkat ini — ' +
       '6 langkah, kurang dari semenit.'
   },
   {
@@ -32,7 +32,7 @@ const STEPS: Step[] = [
     title: 'Kecepatan pasar',
     body:
       'Market jalan terus. Tekan ❚❚ buat jeda kalau mau mikir, atau 5x/10x buat percepat. 1 tick = 1 jam ' +
-      'pasar simulasi.'
+      'waktu pasar.'
   },
   {
     id: 'nav-market',

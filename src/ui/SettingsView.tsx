@@ -43,7 +43,7 @@ export function SettingsView() {
     <div>
       <div className="panel">
         <div className="panel-head">
-          <span>Profil Simulasi</span>
+          <span>Profil Akun</span>
         </div>
         <div className="panel-body">
           <div className="field">
@@ -130,7 +130,7 @@ export function SettingsView() {
             <span className="v">{sim.order.length}</span>
           </div>
           <div className="kv">
-            <span className="k">Tick simulasi</span>
+            <span className="k">Tick berjalan</span>
             <span className="v">{sim.ticks}</span>
           </div>
         </div>
@@ -210,7 +210,7 @@ export function SettingsView() {
             <>
               <div className="hint" style={{ marginBottom: 8 }}>
                 Satu pasar deterministik per tanggal (seed = tanggal), modal $100.000, target +10% dalam 7
-                hari simulasi. Bot AI ikut di papan peringkat. Menang = streak naik; kalah = streak reset.
+                hari. Bot AI ikut di papan peringkat. Menang = streak naik; kalah = streak reset.
               </div>
               <button className="primary" style={{ width: '100%' }} onClick={beginDaily}>
                 Mulai tantangan hari ini
@@ -266,7 +266,7 @@ export function SettingsView() {
             className="short"
             style={{ width: '100%' }}
             onClick={() => {
-              if (confirm('Restart simulasi? Semua progres akan hilang.')) {
+              if (confirm('Restart permainan? Semua progres akan hilang.')) {
                 reset(settings.seed, settings.startingCash);
               }
             }}
@@ -291,7 +291,7 @@ export function SettingsView() {
         </div>
         <div className="panel-body">
           <div className="hint">
-            ShiX Terminal — simulasi pasar dengan nama instrumen yang dipplesetkan (Binoin, Efhereum, Dogicoin,
+            ShiX Terminal — game pasar dengan nama instrumen yang dipplesetkan (Binoin, Efhereum, Dogicoin,
             SPX 500). Semua harga, berita, dan likuidasi adalah fiksi dan dibangkitkan algoritmik, bukan data pasar
             nyata, dan bukan nasihat finansial.
           </div>
