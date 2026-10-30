@@ -3,12 +3,6 @@ import { encounterDef } from '../sim/encounter';
 import { QUESTS, questById, stageProgress } from '../sim/quest';
 import { LOCATION_BY_ID } from '../sim/hub';
 
-/**
- * Bagian Phase 9 di tab Jalan:
- *  - EncounterDialog: muncul pas ketemu orang acak, dengan pilihan dialog + konsekuensi
- *  - QuestPanel: side quest berjenjang dari warga kota (progres dari aksi nyata)
- */
-
 function effHint(ch: {
   effect: { cash?: number; mood?: number; followers?: number; jobXp?: number };
 }): string {
@@ -18,6 +12,68 @@ function effHint(ch: {
   if (ch.effect.followers) parts.push(`+${ch.effect.followers} fol`);
   if (ch.effect.jobXp) parts.push(`+${ch.effect.jobXp} XP`);
   return parts.length ? parts.join(' · ') : '';
+}
+
+/** Hubungan pemain ke NPC: sosmed → kencan → nikah → anak (Phase 10) */
+export function RelationshipPanel() {
+  const sim = useStore((s) => s.sim);
+  const v = useStore((s) => s.v);
+  const dateNpc = useStore((s) => s.dateNpc);
+  const proposeMarried = useStore((s) => s.proposeMarried);
+  const divorceNpc = useStore((s) => s.divorceNpc);
+  void v;
+
+  const relMap = sim.relationship;
+  const spouseEntry = relMap ? Object.entries(relMap).find(([, r]) => r?.level === 'spouse') : undefined;
+  const spouse = spouseEntry ? spouseEntry[1] : undefined;
+  const spouseBotId = spouseEntry ? spouseEntry[0] : null;
+  const datingId = relMap ? Object.entries(relMap).find(([, r]) => r?.level === 'date')?.[0] : undefined;
+  const dateTarget = datingId ? sim.bots.find((b) => b.id === datingId) : null;
+  const datingRel = datingId ? relMap?.[datingId] : undefined;
+
+  const statusLine = spouse
+    ? `👨‍👩‍👧 Menikah · ${spouse.dates} kencan`
+    : datingId
+      ? `❤️ Kencan: ${sim.bots.find((b) => b.id === datingId)?.name ?? datingId} · tahap ${datingRel?.hearts ?? 0}`
+      : '🙏 Belum ada hubungan khusus';
+
+  return (
+    <div className="panel">
+      <div className="panel-head">
+        <span>💞 Hubungan</span>
+        <span className="badge">{statusLine}</span>
+      </div>
+      <div className="panel-body">
+        {spouse && spouseBotId ? (
+          <>
+            <div className="tiny muted">Status: menikah denganku. Ada 2 anak — biaya hidup jadi lebih mahal.</div>
+            <div className="tiny muted">Kids biaya $800/bln (didebet bersama bill hidup).</div>
+            <div className="life-actions">
+              <button className="short ghost" onClick={() => divorceNpc(spouseBotId)}>
+                Putus
+              </button>
+            </div>
+          </>
+        ) : dateTarget ? (
+          <>
+            <div className="tiny muted">
+              Terkencan sama {dateTarget.name} (friendship {Math.round(sim.social.friendship[dateTarget.id] ?? 0)} · tahap {datingRel?.hearts ?? 0}).
+            </div>
+            <div className="life-actions">
+              <button className="short" onClick={() => dateNpc(dateTarget.id)}>
+                Kencan lagi · $500
+              </button>
+              <button className="short" onClick={() => proposeMarried(dateTarget.id)}>
+                Nangis... 😭 (usul)
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="tiny muted">Naikin friendship warga lewat ngobrol buat buka kencan.</div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export function EncounterDialog() {
@@ -66,7 +122,6 @@ export function QuestPanel() {
   const q = sim.quests;
   if (!q) return null;
 
-  // misi yang tersedia dari NPC yang lagi di dekat pemain / friendship cukup
   const available = QUESTS.filter((def) => {
     if (q.completed.includes(def.id)) return false;
     if (q.active.some((a) => a.defId === def.id)) return false;
@@ -86,9 +141,7 @@ export function QuestPanel() {
       </div>
       <div className="panel-body quest-body">
         {q.active.length === 0 && available.length === 0 ? (
-          <div className="tiny muted">
-            Belum ada misi. Naikin friendship warga (ngobrol) buat buka misi sampingan.
-          </div>
+          <div className="tiny muted">Belum ada misi. Naikin friendship warga (ngobrol) buat buka misi sampingan.</div>
         ) : null}
 
         {q.active.map((aq) => {

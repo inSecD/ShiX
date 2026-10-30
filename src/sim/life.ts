@@ -1,5 +1,6 @@
 import type { SimState } from './types';
 import { feeMultOf } from './perks';
+import { KIDS_COST } from './relationship';
 
 /**
  * Life Sim (Phase 8): stamina, mood, kerjaan + karier XP, dan biaya hidup.
@@ -339,13 +340,15 @@ export function lifeTick(state: SimState, warmup = false): void {
   // umumin kerjaan yang kebuka (XP udah cukup)
   announceUnlocks(state, l);
 
-  // tagihan hidup tiap hari (24 jam)
+  // tagihan hidup tiap hari (24 jam) — + anak $800/bln kalo lagi menikah
+  const married = !!state.relationship && Object.values(state.relationship).some((r) => r?.level === 'spouse');
+  const bill = DAILY_COST + (married ? KIDS_COST : 0);
   if (state.ticks - l.lastBillTick >= 24) {
     l.lastBillTick = state.ticks;
-    if (state.cash >= DAILY_COST) {
-      state.cash -= DAILY_COST;
+    if (state.cash >= bill) {
+      state.cash -= bill;
     } else {
-      const short = DAILY_COST - Math.max(0, state.cash);
+      const short = bill - Math.max(0, state.cash);
       state.cash = Math.max(0, state.cash);
       l.debt += short;
       l.mood = Math.max(0, l.mood - 10);

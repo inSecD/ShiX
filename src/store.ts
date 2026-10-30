@@ -45,6 +45,12 @@ import {
   normalizeQuest,
   questOfNpc
 } from './sim/quest';
+import {
+  divorce as divorceRelationship,
+  normalizeRelationship,
+  proposeMarriage,
+  startDating
+} from './sim/relationship';
 import { LOCATION_BY_ID, isLocationUnlocked, locationHint, normalizeHub } from './sim/hub';
 import { chatWith, normalizeSocial } from './sim/social';
 import { clearState, loadState, saveState } from './lib/persist';
@@ -186,6 +192,7 @@ function normalizeSim(sim: SimState, startingCash: number): SimState {
   sim.life = normalizeLife(sim.life);
   sim.encounter = normalizeEncounter(sim.encounter);
   sim.quests = normalizeQuest(sim.quests);
+  sim.relationship = normalizeRelationship(sim.relationship);
   sim.social = normalizeSocial(sim.social);
   sim.feed = normalizeFeed(sim.feed);
   sim.profile = normalizeProfile(sim.profile);
@@ -374,6 +381,10 @@ interface Store {
   questAccept: (defId: string) => void;
   questAbandon: (defId: string) => void;
   questClaim: (defId: string) => void;
+
+  dateNpc: (botId: string) => void;
+  proposeMarried: (botId: string) => void;
+  divorceNpc: (botId: string) => void;
 
   npcChat: (botId: string) => void;
 
@@ -922,6 +933,27 @@ export const useStore = create<Store>((set, get) => ({
   questClaim: (defId) => {
     const { sim, notify } = get();
     const res = claimQuest(sim, defId);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  dateNpc: (botId) => {
+    const { sim, notify } = get();
+    const res = startDating(sim, botId);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  proposeMarried: (botId) => {
+    const { sim, notify } = get();
+    const res = proposeMarriage(sim, botId);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  divorceNpc: (botId) => {
+    const { sim, notify } = get();
+    const res = divorceRelationship(sim, botId);
     notify(res.msg, res.ok ? 'ok' : 'err');
     set((s) => ({ v: s.v + 1 }));
   },

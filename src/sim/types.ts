@@ -5,6 +5,7 @@ import type { BusinessState } from './business';
 import type { LifeState } from './life';
 import type { EncounterState } from './encounter';
 import type { QuestState } from './quest';
+import type { RelationshipState } from './relationship';
 
 export type AssetClass =
   | 'crypto'
@@ -373,6 +374,7 @@ export interface SimState {
   life: LifeState;
   encounter: EncounterState;
   quests: QuestState;
+  relationship: Record<string, RelationshipState>;
   social: SocialState;
   feed: FeedState;
   profile: ProfileState;

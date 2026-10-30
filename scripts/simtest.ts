@@ -28,6 +28,7 @@ import * as businessMod from '../src/sim/business';
 import * as lifeMod from '../src/sim/life';
 import * as encounterMod from '../src/sim/encounter';
 import * as questMod from '../src/sim/quest';
+import * as relationshipMod from '../src/sim/relationship';
 import * as feedMod from '../src/sim/feed';
 import * as perksMod from '../src/sim/perks';
 import * as profileMod from '../src/sim/profile';
@@ -1179,5 +1180,70 @@ function openLong(sim: SimState) {
   console.log(
     'encounter: travel trigger ok (' + def.icon + ' ' + def.title + ') | resolve ok | pending clear: ok',
     '| quest: kenalan 2 tahap klaim ok | konten followers-absolut ok | abandon ok | normalize: ok'
+  );
+}
+
+// ---------- Phase 10: relationship (sosmed → kencan → nikah → anak) ----------
+{
+  const sim = freshSim();
+
+  // ---- kencan butuh friendship cukup ----
+  sim.relationship = relationshipMod.normalizeRelationship(sim.relationship);
+  sim.social.friendship['bot_1'] = 30;
+  const badDate = relationshipMod.startDating(sim, 'bot_1');
+  if (badDate.ok) throw new Error('dating should require friendship >= 60');
+  sim.social.friendship['bot_1'] = 70;
+  const cashBeforeDate = sim.cash;
+  const goodDate = relationshipMod.startDating(sim, 'bot_1');
+  if (!goodDate.ok) throw new Error('dating should succeed with friendship 70: ' + goodDate.msg);
+  const rel1 = sim.relationship['bot_1'];
+  if (rel1?.level !== 'date') throw new Error('relationship should be date, got ' + rel1?.level);
+  if ((rel1?.dates ?? 0) !== 1) throw new Error('dates should be 1');
+  if (Math.abs(sim.cash - (cashBeforeDate - relationshipMod.DATE_COST)) > 1e-6) throw new Error('date should cost ' + relationshipMod.DATE_COST);
+
+  // double date → reject
+  if (relationshipMod.startDating(sim, 'bot_1').ok) throw new Error('double date should be rejected');
+
+  // ---- nikah: butuh level date + cash + friendship cukup ----
+  sim.cash = 50_000;
+  sim.social.friendship['bot_1'] = 80;
+  const badMarriage = relationshipMod.proposeMarriage(sim, 'bot_1');
+  if (!badMarriage.ok) throw new Error('marry should succeed with date+cash+friendship: ' + badMarriage.msg);
+  const rel2 = sim.relationship['bot_1'];
+  if (rel2?.level !== 'spouse') throw new Error('relationship should be spouse, got ' + rel2?.level);
+  if (Math.abs(sim.cash - (50_000 - relationshipMod.MARRIAGE_COST)) > 1e-6) throw new Error('marriage should cost ' + relationshipMod.MARRIAGE_COST);
+  if (sim.life.mood < 100) throw new Error('marriage should raise mood, got ' + sim.life.mood);
+
+  // nikah lagi → reject (spouse)
+  if (relationshipMod.proposeMarriage(sim, 'bot_1').ok) throw new Error('double marriage should fail');
+
+  // ---- divorce: spouse → friend ----
+  const divRes = relationshipMod.divorce(sim, 'bot_1');
+  if (!divRes.ok) throw new Error('divorce should succeed');
+  if (sim.relationship['bot_1']?.level !== 'friend') throw new Error('divorce should set level friend');
+
+  // ---- married → kids bill (-= DAILY_COST + KIDS_COST per day) ----
+  sim.relationship = relationshipMod.normalizeRelationship(sim.relationship);
+  sim.social.friendship['bot_1'] = 80;
+  if (!relationshipMod.startDating(sim, 'bot_1').ok) throw new Error('redo dating failed');
+  sim.cash = 50_000;
+  if (!relationshipMod.proposeMarriage(sim, 'bot_1').ok) throw new Error('redo marriage failed');
+  const cashM = sim.cash;
+  sim.life.lastBillTick = sim.ticks;
+  for (let i = 0; i < 24; i++) tick(sim, settings);
+  const drop = cashM - sim.cash;
+  const want = lifeMod.DAILY_COST + relationshipMod.KIDS_COST;
+  if (Math.abs(drop - want) > 1.5) throw new Error('married bill should drop by daily+kids, got ' + drop + ' want ' + want);
+  if (!sim.relationship['bot_1']?.level) throw new Error('married should keep level spouse');
+
+  // ---- normalize: save lama tanpa relationship, nilai rusak ----
+  const normR = relationshipMod.normalizeRelationship({ bot_1: { level: 'date', hearts: 'x', dates: -2 } });
+  if (normR['bot_1']?.level !== 'date' || normR['bot_1']?.hearts !== 30 || normR['bot_1']?.dates !== 0)
+    throw new Error('normalizeRelationship should sanitize: ' + JSON.stringify(normR));
+  if (Object.keys(relationshipMod.normalizeRelationship(undefined)).length !== 0)
+    throw new Error('normalizeRelationship(undefined) should be empty');
+
+  console.log(
+    'relationship: dating(ok/friendship60) | marry(ok/cash20k) | divorce(ok) | married kids bill ok (' + want + ') | normalize: ok'
   );
 }
