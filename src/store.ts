@@ -27,6 +27,14 @@ import {
 import { buyAsset, normalizeLifestyle, sellAsset } from './sim/lifestyle';
 import { buyBusiness, normalizeBusiness, upgradeBusiness } from './sim/business';
 import { feedFromYou, normalizeFeed, toggleLike, toggleRepost } from './sim/feed';
+import {
+  applyJob,
+  normalizeLife,
+  quitJob,
+  takeSleep,
+  takeSnack,
+  toggleShift
+} from './sim/life';
 import { normalizeProfile, publishPost, toggleFollow } from './sim/profile';
 import { LOCATION_BY_ID, isLocationUnlocked, locationHint, normalizeHub } from './sim/hub';
 import { chatWith, normalizeSocial } from './sim/social';
@@ -166,6 +174,7 @@ function normalizeSim(sim: SimState, startingCash: number): SimState {
   sim.lifestyle = normalizeLifestyle(sim.lifestyle, sim.ticks);
   sim.hub = normalizeHub(sim.hub);
   sim.business = normalizeBusiness(sim.business, sim.ticks);
+  sim.life = normalizeLife(sim.life);
   sim.social = normalizeSocial(sim.social);
   sim.feed = normalizeFeed(sim.feed);
   sim.profile = normalizeProfile(sim.profile);
@@ -343,6 +352,12 @@ interface Store {
   repostPost: (postId: string) => void;
 
   hubGoto: (locId: string) => void;
+
+  jobApply: (jobId: string) => void;
+  jobQuit: () => void;
+  lifeShift: () => void;
+  lifeSleep: () => void;
+  lifeSnack: () => void;
 
   npcChat: (botId: string) => void;
 
@@ -813,6 +828,41 @@ export const useStore = create<Store>((set, get) => ({
     hub.locId = locId;
     if (!hub.visited.includes(locId)) hub.visited.push(locId);
     notify(`${def.icon} ${def.name} · ${def.mood}`, 'ok');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  jobApply: (jobId) => {
+    const { sim, notify } = get();
+    const res = applyJob(sim, jobId);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  jobQuit: () => {
+    const { sim, notify } = get();
+    const res = quitJob(sim);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  lifeShift: () => {
+    const { sim, notify } = get();
+    const res = toggleShift(sim);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  lifeSleep: () => {
+    const { sim, notify } = get();
+    const res = takeSleep(sim);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  lifeSnack: () => {
+    const { sim, notify } = get();
+    const res = takeSnack(sim);
+    notify(res.msg, res.ok ? 'ok' : 'err');
     set((s) => ({ v: s.v + 1 }));
   },
 

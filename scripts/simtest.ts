@@ -25,6 +25,7 @@ import * as lifestyleMod from '../src/sim/lifestyle';
 import * as hubMod from '../src/sim/hub';
 import * as socialMod from '../src/sim/social';
 import * as businessMod from '../src/sim/business';
+import * as lifeMod from '../src/sim/life';
 import * as feedMod from '../src/sim/feed';
 import * as perksMod from '../src/sim/perks';
 import * as profileMod from '../src/sim/profile';
@@ -405,11 +406,12 @@ function openLong(sim: SimState) {
   const upkeep = dailyUpkeep(sim.lifestyle);
   if (Math.abs(upkeep - 20) > 1e-6) throw new Error('daily upkeep mismatch: ' + upkeep);
 
-  // tick 24x (1 hari) → upkeep didebet sekali
+  // tick 24x (1 hari) → upkeep + biaya hidup didebet sekali
   for (let i = 0; i < 24; i++) tick(sim, settings);
   const cashAfterDay = sim.cash;
-  if (Math.abs(cashAfterDay - (cashAfterBuy - upkeep)) > 1e-6)
-    throw new Error(`upkeep not debited after a day: ${cashAfterBuy} -> ${cashAfterDay} (want -${upkeep})`);
+  const want = cashAfterBuy - upkeep - lifeMod.DAILY_COST;
+  if (Math.abs(cashAfterDay - want) > 1e-6)
+    throw new Error(`upkeep not debited after a day: ${cashAfterBuy} -> ${cashAfterDay} (want -${upkeep} -${lifeMod.DAILY_COST})`);
   if (sim.lifestyle.stats.upkeepPaid < upkeep) throw new Error('upkeepPaid stat not tracked');
 
   // tick 5x lagi (belum 24 penuh) → TIDAK boleh didebet lagi
@@ -916,5 +918,115 @@ function openLong(sim: SimState) {
     'population:', bots.length, '| NPC:', NPC_COUNT, '| unique handles: ok',
     '| feed posts:', posts.length, '| kinds:', [...new Set(posts.map((p) => p.kind))].join(','),
     '| media: ok | like/repost: ok | auto-chart WKND: ok | normalize: ok'
+  );
+}
+
+// ---------- Phase 8: life sim (energi/mood, karier, tagihan, fee fokus) ----------
+{
+  const sim = freshSim();
+  const L = sim.life;
+  if (!L) throw new Error('sim should carry life state');
+  if (L.energy !== 100 || L.mood !== 100) throw new Error('fresh life should start full');
+
+  // kerjaan terkunci tanpa XP
+  const r1 = lifeMod.applyJob(sim, 'fundmgr');
+  if (r1.ok) throw new Error('locked job should be rejected');
+  // lamar barista (req 0) boleh
+  const r2 = lifeMod.applyJob(sim, 'barista');
+  if (!r2.ok) throw new Error('barista should be hirable: ' + r2.msg);
+  // shift butuh energi — energi penuh aman
+  const r3 = lifeMod.toggleShift(sim);
+  if (!r3.ok || !L.working) throw new Error('shift should start: ' + r3.msg);
+
+  // jalanin shift penuh (6 jam) → gaji masuk, energi turun, XP naik
+  const cash0 = sim.cash;
+  const e0 = L.energy;
+  const x0 = L.jobXp;
+  for (let i = 0; i < 6; i++) tick(sim, settings);
+  if (L.working) throw new Error('shift should auto-end after 6 hours');
+  const gained = sim.cash - cash0;
+  if (Math.abs(gained - 75) > 1) throw new Error('wage should be ~75, got ' + gained);
+  if (L.energy >= e0) throw new Error('work should drain energy');
+  if (L.jobXp <= x0) throw new Error('work should grant career XP');
+
+  // tidur → energi pulih
+  const r4 = lifeMod.takeSleep(sim);
+  if (!r4.ok || L.restLeft !== 8) throw new Error('sleep should set 8h rest');
+  for (let i = 0; i < 8; i++) tick(sim, settings);
+  const restAfter = sim.life.restLeft;
+  if (restAfter !== 0 || sim.life.energy < 90) throw new Error('sleep should restore energy, got ' + sim.life.energy);
+
+  // energi habis → shift ditolak
+  L.energy = 10;
+  const r5 = lifeMod.toggleShift(sim);
+  if (r5.ok) throw new Error('low-energy shift should be rejected');
+  L.energy = 100;
+
+  // fokus → fee: fit = 1×, capek = lebih mahal
+  const fitMult = lifeMod.focusFeeMult(sim);
+  if (Math.abs(fitMult - 1) > 1e-9) throw new Error('fit focus fee mult should be 1, got ' + fitMult);
+  L.energy = 0;
+  L.mood = 0;
+  const tiredMult = lifeMod.focusFeeMult(sim);
+  if (tiredMult <= 1.4) throw new Error('tired focus fee mult should be ~1.5, got ' + tiredMult);
+  // tradeFeeMult = perk × fokus
+  const inst = sim.instruments['BN'];
+  const feeFit = (() => { L.energy = 100; L.mood = 100; return lifeMod.tradeFeeMult(sim); })();
+  const feeTired = (() => { L.energy = 0; L.mood = 0; return lifeMod.tradeFeeMult(sim); })();
+  if (Math.abs(feeFit - 1) > 1e-9) throw new Error('no-perk fit mult should be 1');
+  if (feeTired <= feeFit) throw new Error('tired must cost more fee');
+  void inst;
+
+  // tagihan hidup per hari
+  L.mood = 100;
+  L.energy = 100;
+  const cashB = sim.cash;
+  L.lastBillTick = sim.ticks;
+  for (let i = 0; i < 24; i++) tick(sim, settings);
+  const diff = cashB - sim.cash;
+  // 1 tagihan hidup (55) + upkeep lifestyle (0) — cash juga kegerus jajan? nggak
+  if (Math.abs(diff - lifeMod.DAILY_COST) > 1.5)
+    throw new Error('daily living cost should debit once per day, got ' + diff);
+
+  // cash nol → utang + mood jeblok
+  sim.cash = 0;
+  L.mood = 80;
+  L.lastBillTick = sim.ticks;
+  for (let i = 0; i < 24; i++) tick(sim, settings);
+  if (L.debt <= 0) throw new Error('unpaid bills should create debt');
+  if (L.mood >= 80) throw new Error('unpaid bills should hurt mood');
+  // cash lega → utang lunas otomatis
+  sim.cash = 50_000;
+  tick(sim, settings);
+  if (L.debt !== 0) throw new Error('debt should auto-clear when cash is comfortable');
+
+  // jajan: bayar 15, energi naik, cooldown
+  L.energy = 40;
+  const cashS = sim.cash;
+  const r6 = lifeMod.takeSnack(sim);
+  if (!r6.ok) throw new Error('snack should work: ' + r6.msg);
+  if (Math.abs(sim.cash - (cashS - 15)) > 1e-6) throw new Error('snack should cost 15');
+  if (L.energy <= 40) throw new Error('snack should restore energy');
+  const r7 = lifeMod.takeSnack(sim);
+  if (r7.ok) throw new Error('snack should be on cooldown');
+
+  // XP karier buka kerjaan baru + notice
+  L.jobXp = 400;
+  const r8 = lifeMod.applyJob(sim, 'analyst');
+  if (!r8.ok) throw new Error('analyst should unlock at 400 XP: ' + r8.msg);
+  L.jobXp = 1600;
+  lifeMod.lifeTick(sim);
+  if (!L.announced.includes('fundmgr')) throw new Error('career unlock should be announced once');
+
+  // normalize: save lama tanpa life / nilai rusak
+  const norm = lifeMod.normalizeLife({ energy: 999, mood: -5, jobId: 'ghost', jobXp: 'x', debt: -3, announced: 'nope' });
+  if (norm.energy !== 100 || norm.mood !== 0 || norm.jobId !== null || norm.jobXp !== 0 || norm.debt !== 0 || norm.announced.length !== 0)
+    throw new Error('normalizeLife should clamp/sanitize: ' + JSON.stringify(norm));
+  if (lifeMod.normalizeLife(undefined).energy !== 100) throw new Error('normalizeLife(undefined) should default');
+
+  console.log(
+    'life: wage 75/6j ok | XP karier:', Math.floor(L.jobXp),
+    '| tidur pulih: ok | fee fit', feeFit.toFixed(2), '→ capek', tiredMult.toFixed(2),
+    '| tagihan/hari:', lifeMod.DAILY_COST, '| utang: auto-lunas | jajan: ok | karier unlock: ok | normalize: ok'
   );
 }

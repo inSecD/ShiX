@@ -3,6 +3,7 @@ import { useStore } from '../store';
 import { STRATEGY_LABEL } from '../sim/bots';
 import { chatCooldownLeft, friendshipOf, npcsAtLocation } from '../sim/social';
 import { postCooldownLeft } from '../sim/profile';
+import { LifePanel } from './LifePanel';
 import {
   LOCATIONS,
   LOCATION_BY_ID,
@@ -509,6 +510,8 @@ export function WorldHubView() {
           <div className="hub-flavor">“{current.flavor}”</div>
         </div>
       </div>
+
+      <LifePanel />
 
       {npcs.length > 0 && (
         <div className="panel">
