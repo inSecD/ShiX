@@ -1,6 +1,7 @@
 import { useStore } from '../store';
 import { encounterDef } from '../sim/encounter';
 import { QUESTS, questById, stageProgress } from '../sim/quest';
+import { isBankrupt } from '../sim/meta';
 import { LOCATION_BY_ID } from '../sim/hub';
 
 function effHint(ch: {
@@ -228,6 +229,37 @@ export function MinigamePanel() {
               {k === 'chart' ? 'Chart Frenzy' : 'Relax Run'}
             </button>
           ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Meta (Phase 13): rumah / kredit / bangkrut */
+export function MetaPanel() {
+  const sim = useStore((s) => s.sim);
+  const v = useStore((s) => s.v);
+  const payOffLoan = useStore((s) => s.payOffLoan);
+  void v;
+
+  const meta = sim.meta;
+  const mortgageAssetId = meta?.mortgageAssetId ?? null;
+  const loan = meta?.loan ?? 0;
+  const bankruptFlag = meta?.bankrupt ?? isBankrupt(sim);
+
+  return (
+    <div className="panel">
+      <div className="panel-head">
+        <span>🏠 Meta</span>
+        <span className={`badge ${bankruptFlag ? 'danger' : ''}`}>{bankruptFlag ? 'BANGKRUT' : 'AMAN'}</span>
+      </div>
+      <div className="panel-body">
+        <div className="tiny muted">Kredit: ${Math.round(loan)} {mortgageAssetId ? `(as ${mortgageAssetId})` : ''}</div>
+        <div className="tiny muted">Status: {bankruptFlag ? 'Kamu bangkrut. Wajar, pasar lagi naik turun.' : 'Belum bangkrut.'}</div>
+        <div className="life-actions">
+          <button className="short" disabled={!bankruptFlag} onClick={() => payOffLoan()}>
+            Lunasi Kredit
+          </button>
         </div>
       </div>
     </div>

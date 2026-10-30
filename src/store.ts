@@ -52,6 +52,7 @@ import {
   startDating
 } from './sim/relationship';
 import { runMinigame } from './sim/minigame';
+import { normalizeMeta, payOffLoan, takeMortgage } from './sim/meta';
 import { LOCATION_BY_ID, isLocationUnlocked, locationHint, normalizeHub } from './sim/hub';
 import { chatWith, normalizeSocial } from './sim/social';
 import { clearState, loadState, saveState } from './lib/persist';
@@ -194,6 +195,7 @@ function normalizeSim(sim: SimState, startingCash: number): SimState {
   sim.encounter = normalizeEncounter(sim.encounter);
   sim.quests = normalizeQuest(sim.quests);
   sim.relationship = normalizeRelationship(sim.relationship);
+  sim.meta = normalizeMeta(sim.meta);
   sim.social = normalizeSocial(sim.social);
   sim.feed = normalizeFeed(sim.feed);
   sim.profile = normalizeProfile(sim.profile);
@@ -388,6 +390,8 @@ interface Store {
   divorceNpc: (botId: string) => void;
 
   minigamePlay: (kind: string) => void;
+  takeMortgage: (assetId: string) => void;
+  payOffLoan: () => void;
 
   npcChat: (botId: string) => void;
 
@@ -964,6 +968,20 @@ export const useStore = create<Store>((set, get) => ({
   minigamePlay: (kind) => {
     const { sim, notify } = get();
     const res = runMinigame(sim, kind);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  takeMortgage: (assetId) => {
+    const { sim, notify } = get();
+    const res = takeMortgage(sim, assetId);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  payOffLoan: () => {
+    const { sim, notify } = get();
+    const res = payOffLoan(sim);
     notify(res.msg, res.ok ? 'ok' : 'err');
     set((s) => ({ v: s.v + 1 }));
   },

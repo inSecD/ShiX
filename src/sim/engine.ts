@@ -20,6 +20,7 @@ import { createEncounter } from './encounter';
 import { createQuest } from './quest';
 import { createRelationship } from './relationship';
 import { createStory, chaosOf } from './story';
+import { createMeta } from './meta';
 import { createFeed, feedTick } from './feed';
 import { tradeFeeMult } from './life';
 import { createProfile, profileTick } from './profile';
@@ -205,6 +206,7 @@ export function createSim(settings: Settings): SimState {
     profile: createProfile(),
     chaos: 0.3,
     story: createStory(),
+    meta: createMeta(),
     pendingEvent: null
   };
 

@@ -7,6 +7,7 @@ import type { EncounterState } from './encounter';
 import type { QuestState } from './quest';
 import type { RelationshipState } from './relationship';
 import type { StoryState } from './story';
+import type { MetaState } from './meta';
 
 export type AssetClass =
   | 'crypto'
@@ -381,5 +382,6 @@ export interface SimState {
   profile: ProfileState;
   chaos: number;
   story: StoryState;
+  meta: MetaState;
   pendingEvent: PendingEvent | null;
 }

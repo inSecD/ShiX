@@ -31,6 +31,7 @@ import * as questMod from '../src/sim/quest';
 import * as relationshipMod from '../src/sim/relationship';
 import * as storyMod from '../src/sim/story';
 import * as minigameMod from '../src/sim/minigame';
+import * as metaMod from '../src/sim/meta';
 import * as feedMod from '../src/sim/feed';
 import * as perksMod from '../src/sim/perks';
 import * as profileMod from '../src/sim/profile';
@@ -1311,4 +1312,37 @@ function openLong(sim: SimState) {
   if (mc3.ok) throw new Error('unknown minigame kind should fail');
 
   console.log('minigame: chart ok | mood ok | unknown fail');
+}
+
+// ---------- Phase 13: meta (rumah / kredit / bangkrut) ----------
+{
+  const sim = freshSim();
+
+  // ---- normalize ----
+  const normM = metaMod.normalizeMeta({ bankrupt: true, mortgageAssetId: 'house_villa', loan: 'x' });
+  if (normM.bankrupt !== true || normM.mortgageAssetId !== 'house_villa' || normM.loan !== 0)
+    throw new Error('normalizeMeta should sanitize: ' + JSON.stringify(normM));
+  if (metaMod.normalizeMeta(undefined).bankrupt !== false) throw new Error('normalizeMeta(undefined) should default');
+
+  // ---- take mortgage: butuh aset dimiliki ----
+  const badMt = metaMod.takeMortgage(sim, 'island_pulau');
+  if (badMt.ok) throw new Error('mortgage on unowned asset should fail');
+  sim.lifestyle.owned.push('house_basic');
+  sim.cash = 200_000;
+  const mt = metaMod.takeMortgage(sim, 'house_basic');
+  if (!mt.ok) throw new Error('mortgage should succeed with enough cash: ' + mt.msg);
+  if (sim.meta.loan <= 0) throw new Error('mortgage should set loan > 0');
+
+  // ---- pay off loan ----
+  const po = metaMod.payOffLoan(sim);
+  if (!po.ok) throw new Error('payOffLoan should succeed: ' + po.msg);
+  if (sim.meta.loan !== 0) throw new Error('loan should be cleared after payOffLoan');
+
+  // ---- isBankrupt: loan > 5x cash → bangkrut ----
+  sim.meta = { bankrupt: false, mortgageAssetId: null, loan: 1_000_000 };
+  if (!metaMod.isBankrupt(sim)) throw new Error('should be bankrupt when loan > 5x cash');
+  sim.meta = { bankrupt: true, mortgageAssetId: null, loan: 0 };
+  if (!metaMod.isBankrupt(sim)) throw new Error('explicit bankrupt flag should hold');
+
+  console.log('meta: mortgage/payoff/bankrupt ok');
 }
