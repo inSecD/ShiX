@@ -30,6 +30,7 @@ import * as encounterMod from '../src/sim/encounter';
 import * as questMod from '../src/sim/quest';
 import * as relationshipMod from '../src/sim/relationship';
 import * as storyMod from '../src/sim/story';
+import * as minigameMod from '../src/sim/minigame';
 import * as feedMod from '../src/sim/feed';
 import * as perksMod from '../src/sim/perks';
 import * as profileMod from '../src/sim/profile';
@@ -1286,4 +1287,28 @@ function openLong(sim: SimState) {
   console.log(
     'story & chaos: chaos 0.25(n)/0.175(e)/0.4(b) | beats krisis/bull ok | init chaos/story ok'
   );
+}
+
+// ---------- Phase 12: mini-game ----------
+{
+  const sim = freshSim();
+
+  const cashBeforeChart = sim.cash;
+  const moodBeforeChart = sim.life.mood;
+  const mc1 = minigameMod.runMinigame(sim, 'chart');
+  if (!mc1.ok) throw new Error('minigame chart should succeed');
+  if (mc1.score == null) throw new Error('minigame chart should return score');
+  if (typeof mc1.rewardCash !== 'number') throw new Error('minigame chart should return rewardCash');
+  const expectedCash = cashBeforeChart + (mc1.score ?? 0) * 25;
+  if (Math.abs(sim.cash - expectedCash) > 1e-6) throw new Error('minigame chart cash reward mismatch: ' + sim.cash);
+
+  const mc2 = minigameMod.runMinigame(sim, 'mood');
+  if (!mc2.ok) throw new Error('minigame mood should succeed');
+  if (mc2.rewardMood !== 15) throw new Error('minigame mood should reward +15');
+  if (sim.life.mood < moodBeforeChart) throw new Error('minigame mood should raise mood');
+
+  const mc3 = minigameMod.runMinigame(sim, 'unknown_kind');
+  if (mc3.ok) throw new Error('unknown minigame kind should fail');
+
+  console.log('minigame: chart ok | mood ok | unknown fail');
 }

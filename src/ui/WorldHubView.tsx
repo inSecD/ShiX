@@ -4,7 +4,7 @@ import { STRATEGY_LABEL } from '../sim/bots';
 import { chatCooldownLeft, friendshipOf, npcsAtLocation } from '../sim/social';
 import { postCooldownLeft } from '../sim/profile';
 import { LifePanel } from './LifePanel';
-import { EncounterDialog, QuestPanel, RelationshipPanel } from './HubExtras';
+import { EncounterDialog, QuestPanel, RelationshipPanel, MinigamePanel } from './HubExtras';
 import {
   LOCATIONS,
   LOCATION_BY_ID,
@@ -575,6 +575,8 @@ export function WorldHubView() {
       <QuestPanel />
 
       <RelationshipPanel />
+
+      <MinigamePanel />
 
       <div className="panel">
         <div className="panel-head">

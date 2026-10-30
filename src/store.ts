@@ -51,6 +51,7 @@ import {
   proposeMarriage,
   startDating
 } from './sim/relationship';
+import { runMinigame } from './sim/minigame';
 import { LOCATION_BY_ID, isLocationUnlocked, locationHint, normalizeHub } from './sim/hub';
 import { chatWith, normalizeSocial } from './sim/social';
 import { clearState, loadState, saveState } from './lib/persist';
@@ -385,6 +386,8 @@ interface Store {
   dateNpc: (botId: string) => void;
   proposeMarried: (botId: string) => void;
   divorceNpc: (botId: string) => void;
+
+  minigamePlay: (kind: string) => void;
 
   npcChat: (botId: string) => void;
 
@@ -954,6 +957,13 @@ export const useStore = create<Store>((set, get) => ({
   divorceNpc: (botId) => {
     const { sim, notify } = get();
     const res = divorceRelationship(sim, botId);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  minigamePlay: (kind) => {
+    const { sim, notify } = get();
+    const res = runMinigame(sim, kind);
     notify(res.msg, res.ok ? 'ok' : 'err');
     set((s) => ({ v: s.v + 1 }));
   },

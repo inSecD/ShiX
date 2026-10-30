@@ -207,3 +207,29 @@ export function QuestPanel() {
     </div>
   );
 }
+
+export function MinigamePanel() {
+  const v = useStore((s) => s.v);
+  const minigamePlay = useStore((s) => s.minigamePlay);
+  void v;
+
+  const kinds = ['chart', 'mood'];
+
+  return (
+    <div className="panel">
+      <div className="panel-head">
+        <span>🎮 Mini-game</span>
+      </div>
+      <div className="panel-body">
+        <div className="tiny muted">Otot cepat. Chart Frenzy: baca candle → +cash/mood. Relax Run: relaksasi → +mood.</div>
+        <div className="life-actions">
+          {kinds.map((k) => (
+            <button key={k} className="short" onClick={() => minigamePlay(k)}>
+              {k === 'chart' ? 'Chart Frenzy' : 'Relax Run'}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
