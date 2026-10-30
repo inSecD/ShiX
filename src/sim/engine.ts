@@ -15,8 +15,14 @@ import { createLifestyle, lifestyleAssetsValue, lifestyleTick } from './lifestyl
 import { createHub } from './hub';
 import { createSocial } from './social';
 import { businessesValue, businessTick, createBusiness } from './business';
+import { createLife, lifeTick } from './life';
+import { createEncounter } from './encounter';
+import { createQuest } from './quest';
+import { createRelationship } from './relationship';
+import { createStory, chaosOf } from './story';
+import { createMeta } from './meta';
 import { createFeed, feedTick } from './feed';
-import { feeMultOf } from './perks';
+import { tradeFeeMult } from './life';
 import { createProfile, profileTick } from './profile';
 import type { AssetClass, Candle, Fill, Instrument, Position, Settings, SimState } from './types';
 
@@ -191,14 +197,23 @@ export function createSim(settings: Settings): SimState {
     lifestyle: createLifestyle(),
     hub: createHub(),
     business: createBusiness(),
+    life: createLife(),
+    encounter: createEncounter(),
+    quests: createQuest(),
+    relationship: createRelationship(),
     social: createSocial(),
     feed: createFeed(),
     profile: createProfile(),
+    chaos: 0.3,
+    story: createStory(),
+    meta: createMeta(),
     pendingEvent: null
   };
 
   for (let i = 0; i < 72; i++) tick(state, settings, true);
 
+  // tagihan hidup mulai dihitung dari sini (bukan numpuk dari tick 0)
+  state.life.lastBillTick = state.ticks;
   state.nextTokenAt = state.simTime + 6 * HOUR;
   state.nextEventAt = state.simTime + rng.int(1, 6) * HOUR;
   state.equityCurve = [];
@@ -213,7 +228,7 @@ export function tick(state: SimState, settings: Settings, warmup = false): void 
   state.simTime += HOUR;
   state.ticks += 1;
 
-  updateMacro(state, rng);
+  updateMacro(state, rng, settings.difficulty);
 
   if (state.simTime >= state.nextEventAt) {
     if (state.pendingEvent) {
@@ -236,6 +251,7 @@ export function tick(state: SimState, settings: Settings, warmup = false): void 
   const worldNews = worldTick(state.world, state);
   lifestyleTick(state);
   businessTick(state);
+  lifeTick(state, warmup);
   feedTick(state, rng);
   profileTick(state);
   if (!warmup) {
@@ -287,8 +303,11 @@ export function tick(state: SimState, settings: Settings, warmup = false): void 
   state.rngState = rng.state;
 }
 
-function updateMacro(state: SimState, rng: RNG): void {
+function updateMacro(state: SimState, rng: RNG, difficulty: string): void {
   const m = state.macro;
+
+  // chaos (Phase 11): berasal dari tingkat risiko makro + kesulitan — mempengaruhi event
+  state.chaos = chaosOf(state, difficulty);
 
   if (rng.chance(0.0035)) {
     const next = REGIMES[rng.weightedIndex(REGIMES.map((r) => r.prob))];
@@ -476,7 +495,7 @@ function processOrders(state: SimState, settings: Settings, rng: RNG): void {
 
     const fillFrac = clamp(0.3 + inst.liquidity * 0.85, 0.15, 1) * rng.float(0.55, 1);
     let qty = remaining * fillFrac;
-    const feeRate = settings.feeMaker * feeMultOf(state);
+    const feeRate = settings.feeMaker * tradeFeeMult(state);
     const price = o.side === 'buy' ? Math.min(limit, inst.price) : Math.max(limit, inst.price);
     const affordable = Math.max(0, ((state.cash - qty * price * feeRate) * o.lev) / price);
     if (affordable < qty) qty = affordable;
@@ -561,7 +580,7 @@ function closeBracket(
   const inst = state.instruments[pos.instId];
   if (!inst) return;
   const side = pos.side === 'long' ? 'sell' : 'buy';
-  const est = estimateFillPrice(inst, side, pos.qty, settings, feeMultOf(state));
+  const est = estimateFillPrice(inst, side, pos.qty, settings, tradeFeeMult(state));
   const dir = pos.side === 'long' ? 1 : -1;
   const movePct = pos.entry > 0 ? ((est.price - pos.entry) / pos.entry) * 100 * dir : 0;
   const res = closePosition(state, pos.id, pos.qty, est.price, est.fee, kind as Fill['kind'], label);
@@ -713,6 +732,6 @@ export function estimateOrderFill(
 ): { price: number; fee: number; slippage: number } {
   const inst = state.instruments[instId];
   if (!inst) return { price: 0, fee: 0, slippage: 0 };
-  const est = estimateFillPrice(inst, side, qty, settings, feeMultOf(state));
+  const est = estimateFillPrice(inst, side, qty, settings, tradeFeeMult(state));
   return { price: est.price, fee: est.fee, slippage: est.slippage };
 }

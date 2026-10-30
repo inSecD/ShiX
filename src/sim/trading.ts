@@ -1,5 +1,5 @@
 import type { Fill, Instrument, Order, OrderSide, OrderType, Position, Settings, SimState } from './types';
-import { feeMultOf } from './perks';
+import { tradeFeeMult } from './life';
 
 export function uid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
@@ -78,11 +78,11 @@ export function buySpot(
   if (!(state.cash > 0)) return { ok: false, msg: 'Dana tidak cukup' };
 
   let qty = value / inst.price;
-  let est = estimateFillPrice(inst, 'buy', qty, settings, feeMultOf(state));
+  let est = estimateFillPrice(inst, 'buy', qty, settings, tradeFeeMult(state));
   let total = est.notional + est.fee;
   for (let i = 0; i < 3 && total > state.cash; i++) {
     qty *= state.cash / total;
-    est = estimateFillPrice(inst, 'buy', qty, settings, feeMultOf(state));
+    est = estimateFillPrice(inst, 'buy', qty, settings, tradeFeeMult(state));
     total = est.notional + est.fee;
   }
   if (!(qty > 0) || !Number.isFinite(qty) || total > state.cash + 1e-9) {
@@ -138,7 +138,7 @@ export function sellSpot(
   const sellQty = Math.min(Number(qty), holding.qty);
   if (!(sellQty > 0) || !Number.isFinite(sellQty)) return { ok: false, msg: 'Jumlah tidak valid' };
 
-  const est = estimateFillPrice(inst, 'sell', sellQty, settings, feeMultOf(state));
+  const est = estimateFillPrice(inst, 'sell', sellQty, settings, tradeFeeMult(state));
   const proceeds = est.notional - est.fee;
   const pnl = (est.price - holding.avgCost) * sellQty - est.fee;
   state.cash += proceeds;
@@ -328,7 +328,7 @@ export function placeOrder(state: SimState, settings: Settings, req: OrderReques
   const refPrice = req.type === 'limit' && req.price ? req.price : inst.price;
   const notional = req.qty * refPrice;
   const margin = notional / lev;
-  const feeRate = (req.type === 'limit' || req.type === 'stop-limit' ? settings.feeMaker : settings.feeTaker) * feeMultOf(state);
+  const feeRate = (req.type === 'limit' || req.type === 'stop-limit' ? settings.feeMaker : settings.feeTaker) * tradeFeeMult(state);
   const estFee = notional * feeRate;
 
   const existing = findPosition(state, req.instId);
@@ -437,7 +437,7 @@ export function applyFill(
 }
 
 export function fillMarketOrder(state: SimState, settings: Settings, order: Order, inst: Instrument): void {
-  const est = estimateFillPrice(inst, order.side, order.qty, settings, feeMultOf(state));
+  const est = estimateFillPrice(inst, order.side, order.qty, settings, tradeFeeMult(state));
   applyFill(state, order, order.qty, est.price, est.fee);
   order.status = 'filled';
 }
@@ -459,7 +459,7 @@ export function closePositionById(
   if (!inst) return { ok: false, msg: 'Instrumen tidak ditemukan' };
   const qty = pos.qty * Math.max(0, Math.min(1, fraction));
   if (qty <= 0) return { ok: false, msg: 'Ukuran tidak valid' };
-  const est = estimateFillPrice(inst, pos.side === 'long' ? 'sell' : 'buy', qty, settings, feeMultOf(state));
+  const est = estimateFillPrice(inst, pos.side === 'long' ? 'sell' : 'buy', qty, settings, tradeFeeMult(state));
   closePosition(state, pos.id, qty, est.price, est.fee);
   return { ok: true, msg: 'Posisi ditutup' };
 }

@@ -2,6 +2,12 @@ import type { WorldState } from './world';
 import type { LifestyleState } from './lifestyle';
 import type { HubState } from './hub';
 import type { BusinessState } from './business';
+import type { LifeState } from './life';
+import type { EncounterState } from './encounter';
+import type { QuestState } from './quest';
+import type { RelationshipState } from './relationship';
+import type { StoryState } from './story';
+import type { MetaState } from './meta';
 
 export type AssetClass =
   | 'crypto'
@@ -367,8 +373,15 @@ export interface SimState {
   lifestyle: LifestyleState;
   hub: HubState;
   business: BusinessState;
+  life: LifeState;
+  encounter: EncounterState;
+  quests: QuestState;
+  relationship: Record<string, RelationshipState>;
   social: SocialState;
   feed: FeedState;
   profile: ProfileState;
+  chaos: number;
+  story: StoryState;
+  meta: MetaState;
   pendingEvent: PendingEvent | null;
 }

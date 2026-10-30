@@ -25,6 +25,13 @@ import * as lifestyleMod from '../src/sim/lifestyle';
 import * as hubMod from '../src/sim/hub';
 import * as socialMod from '../src/sim/social';
 import * as businessMod from '../src/sim/business';
+import * as lifeMod from '../src/sim/life';
+import * as encounterMod from '../src/sim/encounter';
+import * as questMod from '../src/sim/quest';
+import * as relationshipMod from '../src/sim/relationship';
+import * as storyMod from '../src/sim/story';
+import * as minigameMod from '../src/sim/minigame';
+import * as metaMod from '../src/sim/meta';
 import * as feedMod from '../src/sim/feed';
 import * as perksMod from '../src/sim/perks';
 import * as profileMod from '../src/sim/profile';
@@ -405,11 +412,12 @@ function openLong(sim: SimState) {
   const upkeep = dailyUpkeep(sim.lifestyle);
   if (Math.abs(upkeep - 20) > 1e-6) throw new Error('daily upkeep mismatch: ' + upkeep);
 
-  // tick 24x (1 hari) → upkeep didebet sekali
+  // tick 24x (1 hari) → upkeep + biaya hidup didebet sekali
   for (let i = 0; i < 24; i++) tick(sim, settings);
   const cashAfterDay = sim.cash;
-  if (Math.abs(cashAfterDay - (cashAfterBuy - upkeep)) > 1e-6)
-    throw new Error(`upkeep not debited after a day: ${cashAfterBuy} -> ${cashAfterDay} (want -${upkeep})`);
+  const want = cashAfterBuy - upkeep - lifeMod.DAILY_COST;
+  if (Math.abs(cashAfterDay - want) > 1e-6)
+    throw new Error(`upkeep not debited after a day: ${cashAfterBuy} -> ${cashAfterDay} (want -${upkeep} -${lifeMod.DAILY_COST})`);
   if (sim.lifestyle.stats.upkeepPaid < upkeep) throw new Error('upkeepPaid stat not tracked');
 
   // tick 5x lagi (belum 24 penuh) → TIDAK boleh didebet lagi
@@ -917,4 +925,424 @@ function openLong(sim: SimState) {
     '| feed posts:', posts.length, '| kinds:', [...new Set(posts.map((p) => p.kind))].join(','),
     '| media: ok | like/repost: ok | auto-chart WKND: ok | normalize: ok'
   );
+}
+
+// ---------- Phase 8: life sim (energi/mood, karier, tagihan, fee fokus) ----------
+{
+  const sim = freshSim();
+  const L = sim.life;
+  if (!L) throw new Error('sim should carry life state');
+  if (L.energy !== 100 || L.mood !== 100) throw new Error('fresh life should start full');
+
+  // kerjaan terkunci tanpa XP
+  const r1 = lifeMod.applyJob(sim, 'fundmgr');
+  if (r1.ok) throw new Error('locked job should be rejected');
+  // lamar barista (req 0) boleh
+  const r2 = lifeMod.applyJob(sim, 'barista');
+  if (!r2.ok) throw new Error('barista should be hirable: ' + r2.msg);
+  // shift butuh energi — energi penuh aman
+  const r3 = lifeMod.toggleShift(sim);
+  if (!r3.ok || !L.working) throw new Error('shift should start: ' + r3.msg);
+
+  // jalanin shift penuh (6 jam) → gaji masuk, energi turun, XP naik
+  const cash0 = sim.cash;
+  const e0 = L.energy;
+  const x0 = L.jobXp;
+  for (let i = 0; i < 6; i++) tick(sim, settings);
+  if (L.working) throw new Error('shift should auto-end after 6 hours');
+  const gained = sim.cash - cash0;
+  if (Math.abs(gained - 75) > 1) throw new Error('wage should be ~75, got ' + gained);
+  if (L.energy >= e0) throw new Error('work should drain energy');
+  if (L.jobXp <= x0) throw new Error('work should grant career XP');
+
+  // tidur → energi pulih
+  const r4 = lifeMod.takeSleep(sim);
+  if (!r4.ok || L.restLeft !== 8) throw new Error('sleep should set 8h rest');
+  for (let i = 0; i < 8; i++) tick(sim, settings);
+  const restAfter = sim.life.restLeft;
+  if (restAfter !== 0 || sim.life.energy < 90) throw new Error('sleep should restore energy, got ' + sim.life.energy);
+
+  // energi habis → shift ditolak
+  L.energy = 10;
+  const r5 = lifeMod.toggleShift(sim);
+  if (r5.ok) throw new Error('low-energy shift should be rejected');
+  L.energy = 100;
+
+  // fokus → fee: fit = 1×, capek = lebih mahal
+  const fitMult = lifeMod.focusFeeMult(sim);
+  if (Math.abs(fitMult - 1) > 1e-9) throw new Error('fit focus fee mult should be 1, got ' + fitMult);
+  L.energy = 0;
+  L.mood = 0;
+  const tiredMult = lifeMod.focusFeeMult(sim);
+  if (tiredMult <= 1.4) throw new Error('tired focus fee mult should be ~1.5, got ' + tiredMult);
+  // tradeFeeMult = perk × fokus
+  const inst = sim.instruments['BN'];
+  const feeFit = (() => { L.energy = 100; L.mood = 100; return lifeMod.tradeFeeMult(sim); })();
+  const feeTired = (() => { L.energy = 0; L.mood = 0; return lifeMod.tradeFeeMult(sim); })();
+  if (Math.abs(feeFit - 1) > 1e-9) throw new Error('no-perk fit mult should be 1');
+  if (feeTired <= feeFit) throw new Error('tired must cost more fee');
+  void inst;
+
+  // tagihan hidup per hari
+  L.mood = 100;
+  L.energy = 100;
+  const cashB = sim.cash;
+  L.lastBillTick = sim.ticks;
+  for (let i = 0; i < 24; i++) tick(sim, settings);
+  const diff = cashB - sim.cash;
+  // 1 tagihan hidup (55) + upkeep lifestyle (0) — cash juga kegerus jajan? nggak
+  if (Math.abs(diff - lifeMod.DAILY_COST) > 1.5)
+    throw new Error('daily living cost should debit once per day, got ' + diff);
+
+  // cash nol → utang + mood jeblok
+  sim.cash = 0;
+  L.mood = 80;
+  L.lastBillTick = sim.ticks;
+  for (let i = 0; i < 24; i++) tick(sim, settings);
+  if (L.debt <= 0) throw new Error('unpaid bills should create debt');
+  if (L.mood >= 80) throw new Error('unpaid bills should hurt mood');
+  // cash lega → utang lunas otomatis
+  sim.cash = 50_000;
+  tick(sim, settings);
+  if (L.debt !== 0) throw new Error('debt should auto-clear when cash is comfortable');
+
+  // jajan: bayar 15, energi naik, cooldown
+  L.energy = 40;
+  const cashS = sim.cash;
+  const r6 = lifeMod.takeSnack(sim);
+  if (!r6.ok) throw new Error('snack should work: ' + r6.msg);
+  if (Math.abs(sim.cash - (cashS - 15)) > 1e-6) throw new Error('snack should cost 15');
+  if (L.energy <= 40) throw new Error('snack should restore energy');
+  const r7 = lifeMod.takeSnack(sim);
+  if (r7.ok) throw new Error('snack should be on cooldown');
+
+  // XP karier buka kerjaan baru + notice
+  L.jobXp = 400;
+  const r8 = lifeMod.applyJob(sim, 'analyst');
+  if (!r8.ok) throw new Error('analyst should unlock at 400 XP: ' + r8.msg);
+  L.jobXp = 1600;
+  lifeMod.lifeTick(sim);
+  if (!L.announced.includes('fundmgr')) throw new Error('career unlock should be announced once');
+
+  // normalize: save lama tanpa life / nilai rusak
+  const norm = lifeMod.normalizeLife({ energy: 999, mood: -5, jobId: 'ghost', jobXp: 'x', debt: -3, announced: 'nope' });
+  if (norm.energy !== 100 || norm.mood !== 0 || norm.jobId !== null || norm.jobXp !== 0 || norm.debt !== 0 || norm.announced.length !== 0)
+    throw new Error('normalizeLife should clamp/sanitize: ' + JSON.stringify(norm));
+  if (lifeMod.normalizeLife(undefined).energy !== 100) throw new Error('normalizeLife(undefined) should default');
+
+  console.log(
+    'life: wage 75/6j ok | XP karier:', Math.floor(L.jobXp),
+    '| tidur pulih: ok | fee fit', feeFit.toFixed(2), '→ capek', tiredMult.toFixed(2),
+    '| tagihan/hari:', lifeMod.DAILY_COST, '| utang: auto-lunas | jajan: ok | karier unlock: ok | normalize: ok'
+  );
+}
+
+// ---------- Phase 9: eksplorasi & encounter (random + side quest berjenjang) ----------
+{
+  const sim = freshSim();
+  const rng = new RNG(999);
+
+  // ---- maybeEncounter: paksa kena (chance tinggi) pas travel ----
+  sim.encounter.lastTick = -999;
+  let triggered = null;
+  // coba beberapa kali sampai kena (chance 0.34)
+  for (let i = 0; i < 50 && !triggered; i++) {
+    sim.encounter.lastTick = -999;
+    triggered = encounterMod.maybeEncounter(sim, rng, 'travel');
+  }
+  if (!triggered) throw new Error('encounter should trigger within 50 travel attempts');
+  if (!sim.encounter.pending) throw new Error('triggered encounter should be pending');
+  const pendingId = sim.encounter.pending.defId;
+  const def = encounterMod.encounterDef(pendingId);
+  if (!def) throw new Error('pending encounter def should exist');
+
+  // pending → maybeEncounter lagi harus return null (nggak dobel)
+  sim.encounter.lastTick = -999;
+  if (encounterMod.maybeEncounter(sim, rng, 'travel')) throw new Error('should not trigger while one is pending');
+
+  // resolve pilihan pertama
+  const cashBefore = sim.cash;
+  const moodBefore = sim.life.mood;
+  const res = encounterMod.resolveEncounter(sim, rng, 0);
+  if (!res.ok) throw new Error('resolveEncounter failed: ' + res.msg);
+  if (sim.encounter.pending) throw new Error('pending should clear after resolve');
+  void cashBefore;
+  void moodBefore;
+
+  // resolve tanpa pending → error
+  if (encounterMod.resolveEncounter(sim, rng, 0).ok) throw new Error('resolve without pending should fail');
+
+  // ---- side quest: terima, progres via bump, klaim tahap demi tahap ----
+  const q = sim.quests;
+  // 'kenalan' butuh friendship 5 sama bot_9 (Sinta)
+  sim.social.friendship['bot_9'] = 10;
+
+  // misi nggak ada → tolak
+  if (questMod.acceptQuest(sim, 'nggak_ada').ok) throw new Error('unknown quest should be rejected');
+  // friendship kurang → tolak (reset dulu)
+  sim.social.friendship['bot_9'] = 0;
+  if (questMod.acceptQuest(sim, 'kenalan').ok) throw new Error('quest with low friendship should be rejected');
+  // friendship cukup → terima
+  sim.social.friendship['bot_9'] = 10;
+  const acc = questMod.acceptQuest(sim, 'kenalan');
+  if (!acc.ok) throw new Error('acceptQuest failed: ' + acc.msg);
+  // dobel terima → tolak
+  if (questMod.acceptQuest(sim, 'kenalan').ok) throw new Error('double accept should fail');
+
+  const aq = q.active.find((a) => a.defId === 'kenalan');
+  if (!aq) throw new Error('kenalan quest should be active');
+  const defK = questMod.questById('kenalan')!;
+  // tahap 0: chat 2x
+  const stage0 = defK.stages[0];
+  questMod.bumpQuest(sim, 'chat', 'bot_0');
+  questMod.bumpQuest(sim, 'chat', 'bot_1');
+  if (!questMod.stageDone(sim, aq, stage0)) throw new Error('chat x2 should complete stage 0');
+  // bump lain (visit) nggak ngaruh ke tahap chat
+  questMod.bumpQuest(sim, 'visit', 'park');
+  const pAfterWrong = aq.progress;
+  if (pAfterWrong !== 2) throw new Error('wrong-kind bump should not increase chat progress, got ' + pAfterWrong);
+
+  // klaim tahap 0 → lanjut tahap 1 (visit 3 lokasi)
+  const cashQ = sim.cash;
+  const claim0 = questMod.claimQuest(sim, 'kenalan');
+  if (!claim0.ok) throw new Error('claim stage0 failed: ' + claim0.msg);
+  if (Math.abs(sim.cash - (cashQ + 150)) > 1e-6) throw new Error('stage0 reward should be +150 cash');
+  if (aq.stage !== 1) throw new Error('should advance to stage 1, got ' + aq.stage);
+  if (aq.progress !== 0) throw new Error('progress should reset on stage advance');
+
+  // klaim lagi sebelum selesai → tolak
+  if (questMod.claimQuest(sim, 'kenalan').ok) throw new Error('claim before done should fail');
+
+  // tahap 1: visit 3 lokasi
+  const stage1 = defK.stages[1];
+  questMod.bumpQuest(sim, 'visit', 'park');
+  questMod.bumpQuest(sim, 'visit', 'cafe');
+  questMod.bumpQuest(sim, 'visit', 'street');
+  if (!questMod.stageDone(sim, aq, stage1)) throw new Error('visit x3 should complete stage 1');
+  const claim1 = questMod.claimQuest(sim, 'kenalan');
+  if (!claim1.ok) throw new Error('claim final stage failed: ' + claim1.msg);
+  if (!q.completed.includes('kenalan')) throw new Error('quest should be marked completed');
+  if (q.active.some((a) => a.defId === 'kenalan')) throw new Error('completed quest should leave active list');
+
+  // ---- quest kind absolut: followers (dicek langsung dari state) ----
+  sim.social.friendship['bot_2'] = 20; // DegenBoy buka 'konten'
+  const accC = questMod.acceptQuest(sim, 'konten');
+  if (!accC.ok) throw new Error('konten quest should be accepted: ' + accC.msg);
+  const aqC = q.active.find((a) => a.defId === 'konten')!;
+  const defC = questMod.questById('konten')!;
+  // tahap 0: post 3x (counter)
+  questMod.bumpQuest(sim, 'post');
+  questMod.bumpQuest(sim, 'post');
+  questMod.bumpQuest(sim, 'post');
+  if (!questMod.stageDone(sim, aqC, defC.stages[0])) throw new Error('post x3 should complete konten stage 0');
+  questMod.claimQuest(sim, 'konten');
+  // tahap 1: like 8x
+  for (let i = 0; i < 8; i++) questMod.bumpQuest(sim, 'like');
+  if (!questMod.stageDone(sim, aqC, defC.stages[1])) throw new Error('like x8 should complete konten stage 1');
+  questMod.claimQuest(sim, 'konten');
+  // tahap 2: followers >= 150 (absolut)
+  const stageFollow = defC.stages[2];
+  sim.profile.followers = 100;
+  if (questMod.stageDone(sim, aqC, stageFollow)) throw new Error('100 followers should NOT complete 150-followers goal');
+  sim.profile.followers = 160;
+  if (!questMod.stageDone(sim, aqC, stageFollow)) throw new Error('160 followers should complete 150-followers goal');
+  const claimC = questMod.claimQuest(sim, 'konten');
+  if (!claimC.ok) throw new Error('claim konten final failed: ' + claimC.msg);
+
+  // ---- abandon ----
+  sim.social.friendship['bot_0'] = 20;
+  questMod.acceptQuest(sim, 'jaringan');
+  const aband = questMod.abandonQuest(sim, 'jaringan');
+  if (!aband.ok) throw new Error('abandon should succeed');
+  if (q.active.some((a) => a.defId === 'jaringan')) throw new Error('abandoned quest should leave active');
+
+  // ---- questOfNpc: availability by friendship & status ----
+  sim.social.friendship['bot_0'] = 20;
+  const offered = questMod.questOfNpc(sim, 'bot_0');
+  if (!offered) throw new Error('bot_0 should offer jaringan (friendship 20)');
+  // completed quest nggak ditawarin lagi (jaringan udah abandon, bukan completed — harusnya masih ditawar)
+  // set completed → nggak ditawar
+  q.completed.push('jaringan');
+  if (questMod.questOfNpc(sim, 'bot_0')) throw new Error('completed quest should not be re-offered');
+
+  // ---- normalize: save lama tanpa encounter/quest, nilai rusak ----
+  const normEnc = encounterMod.normalizeEncounter({ pending: { defId: 'ghost' }, lastTick: 'x', seen: { whale: 'zz' }, total: -5 });
+  if (normEnc.pending?.defId !== 'ghost' || normEnc.lastTick !== -999 || normEnc.total !== 0 || normEnc.seen['whale'] !== 0)
+    throw new Error('normalizeEncounter should sanitize: ' + JSON.stringify(normEnc));
+  if (encounterMod.normalizeEncounter(undefined).pending !== null) throw new Error('normalizeEncounter(undefined) should default');
+
+  const normQ = questMod.normalizeQuest({ active: [{ defId: 'nggak_ada', stage: 9, progress: 'x' }, { defId: 'kenalan', stage: 99, progress: -4 }], completed: ['nggak_ada', 'konten'] });
+  // active quest nggak_ada dibuang; kenalan stage di-clamp
+  if (normQ.active.length !== 1 || normQ.active[0].defId !== 'kenalan')
+    throw new Error('normalizeQuest should drop unknown active quests');
+  if (normQ.active[0].stage !== 1) throw new Error('normalizeQuest should clamp stage, got ' + normQ.active[0].stage);
+  if (normQ.active[0].progress !== 0) throw new Error('normalizeQuest should reset negative progress');
+  if (normQ.completed.includes('nggak_ada') || !normQ.completed.includes('konten'))
+    throw new Error('normalizeQuest should drop unknown completed ids');
+
+  console.log(
+    'encounter: travel trigger ok (' + def.icon + ' ' + def.title + ') | resolve ok | pending clear: ok',
+    '| quest: kenalan 2 tahap klaim ok | konten followers-absolut ok | abandon ok | normalize: ok'
+  );
+}
+
+// ---------- Phase 10: relationship (sosmed → kencan → nikah → anak) ----------
+{
+  const sim = freshSim();
+
+  // ---- kencan butuh friendship cukup ----
+  sim.relationship = relationshipMod.normalizeRelationship(sim.relationship);
+  sim.social.friendship['bot_1'] = 30;
+  const badDate = relationshipMod.startDating(sim, 'bot_1');
+  if (badDate.ok) throw new Error('dating should require friendship >= 60');
+  sim.social.friendship['bot_1'] = 70;
+  const cashBeforeDate = sim.cash;
+  const goodDate = relationshipMod.startDating(sim, 'bot_1');
+  if (!goodDate.ok) throw new Error('dating should succeed with friendship 70: ' + goodDate.msg);
+  const rel1 = sim.relationship['bot_1'];
+  if (rel1?.level !== 'date') throw new Error('relationship should be date, got ' + rel1?.level);
+  if ((rel1?.dates ?? 0) !== 1) throw new Error('dates should be 1');
+  if (Math.abs(sim.cash - (cashBeforeDate - relationshipMod.DATE_COST)) > 1e-6) throw new Error('date should cost ' + relationshipMod.DATE_COST);
+
+  // double date → reject
+  if (relationshipMod.startDating(sim, 'bot_1').ok) throw new Error('double date should be rejected');
+
+  // ---- nikah: butuh level date + cash + friendship cukup ----
+  sim.cash = 50_000;
+  sim.social.friendship['bot_1'] = 80;
+  const badMarriage = relationshipMod.proposeMarriage(sim, 'bot_1');
+  if (!badMarriage.ok) throw new Error('marry should succeed with date+cash+friendship: ' + badMarriage.msg);
+  const rel2 = sim.relationship['bot_1'];
+  if (rel2?.level !== 'spouse') throw new Error('relationship should be spouse, got ' + rel2?.level);
+  if (Math.abs(sim.cash - (50_000 - relationshipMod.MARRIAGE_COST)) > 1e-6) throw new Error('marriage should cost ' + relationshipMod.MARRIAGE_COST);
+  if (sim.life.mood < 100) throw new Error('marriage should raise mood, got ' + sim.life.mood);
+
+  // nikah lagi → reject (spouse)
+  if (relationshipMod.proposeMarriage(sim, 'bot_1').ok) throw new Error('double marriage should fail');
+
+  // ---- divorce: spouse → friend ----
+  const divRes = relationshipMod.divorce(sim, 'bot_1');
+  if (!divRes.ok) throw new Error('divorce should succeed');
+  if (sim.relationship['bot_1']?.level !== 'friend') throw new Error('divorce should set level friend');
+
+  // ---- married → kids bill (-= DAILY_COST + KIDS_COST per day) ----
+  sim.relationship = relationshipMod.normalizeRelationship(sim.relationship);
+  sim.social.friendship['bot_1'] = 80;
+  if (!relationshipMod.startDating(sim, 'bot_1').ok) throw new Error('redo dating failed');
+  sim.cash = 50_000;
+  if (!relationshipMod.proposeMarriage(sim, 'bot_1').ok) throw new Error('redo marriage failed');
+  const cashM = sim.cash;
+  sim.life.lastBillTick = sim.ticks;
+  for (let i = 0; i < 24; i++) tick(sim, settings);
+  const drop = cashM - sim.cash;
+  const want = lifeMod.DAILY_COST + relationshipMod.KIDS_COST;
+  if (Math.abs(drop - want) > 1.5) throw new Error('married bill should drop by daily+kids, got ' + drop + ' want ' + want);
+  if (!sim.relationship['bot_1']?.level) throw new Error('married should keep level spouse');
+
+  // ---- normalize: save lama tanpa relationship, nilai rusak ----
+  const normR = relationshipMod.normalizeRelationship({ bot_1: { level: 'date', hearts: 'x', dates: -2 } });
+  if (normR['bot_1']?.level !== 'date' || normR['bot_1']?.hearts !== 30 || normR['bot_1']?.dates !== 0)
+    throw new Error('normalizeRelationship should sanitize: ' + JSON.stringify(normR));
+  if (Object.keys(relationshipMod.normalizeRelationship(undefined)).length !== 0)
+    throw new Error('normalizeRelationship(undefined) should be empty');
+
+  console.log(
+    'relationship: dating(ok/friendship60) | marry(ok/cash20k) | divorce(ok) | married kids bill ok (' + want + ') | normalize: ok'
+  );
+}
+
+// ---------- Phase 11: cerita & chaos ----------
+{
+  const sim = freshSim();
+
+  // ---- chaos: berasal dari risk makro + kesulitan ----
+  sim.macro.risk = 0.05;
+  const c1 = storyMod.chaosOf(sim, 'normal');
+  if (Math.abs(c1 - 0.25) > 1e-9) throw new Error('chaos should be 0.25 at risk 0.05/normal, got ' + c1);
+  sim.macro.risk = 0.05;
+  const c2 = storyMod.chaosOf(sim, 'easy');
+  if (Math.abs(c2 - 0.175) > 1e-9) throw new Error('chaos should scale down for easy, got ' + c2);
+  sim.macro.risk = 0.05;
+  const c3 = storyMod.chaosOf(sim, 'brutal');
+  if (Math.abs(c3 - 0.4) > 1e-9) throw new Error('chaos should scale up for brutal, got ' + c3);
+
+  // ---- story: beat kecil → arc tetap; beat besar → arc naik ----
+  sim.story = storyMod.createStory();
+  sim.story.progress = 100;
+  let beat1 = storyMod.applyStoryBeat(sim, 0.05, sim.simTime);
+  if (beat1.arc !== 'Awal') throw new Error('small beat should keep arc Awal, got ' + beat1.arc);
+  sim.story.progress = 200;
+  let beat2 = storyMod.applyStoryBeat(sim, 0.9, sim.simTime);
+  if (beat2.arc !== 'Bull Market') throw new Error('beat 0.9 from progress 200 should escalate to Bull Market, got ' + beat2.arc);
+  sim.story.progress = 600;
+  let beat3 = storyMod.applyStoryBeat(sim, 1.4, sim.simTime);
+  if (beat3.arc !== 'Bear Market') throw new Error('beat 1.4 from progress 600 should escalate to Bear Market, got ' + beat3.arc);
+
+  // ---- chaos nyasaran event: impact event naik dgn chaos ----
+  const sim2 = freshSim();
+  sim2.chaos = 0.3;
+  const beforeChaos = sim2.chaos;
+  if (Math.abs(beforeChaos - 0.3) > 1e-9) throw new Error('freshSim should init chaos 0.3, got ' + beforeChaos);
+  if (sim2.story.arc !== 'Awal') throw new Error('freshSim should init story Awal, got ' + sim2.story.arc);
+
+  console.log(
+    'story & chaos: chaos 0.25(n)/0.175(e)/0.4(b) | beats krisis/bull ok | init chaos/story ok'
+  );
+}
+
+// ---------- Phase 12: mini-game ----------
+{
+  const sim = freshSim();
+
+  const cashBeforeChart = sim.cash;
+  const moodBeforeChart = sim.life.mood;
+  const mc1 = minigameMod.runMinigame(sim, 'chart');
+  if (!mc1.ok) throw new Error('minigame chart should succeed');
+  if (mc1.score == null) throw new Error('minigame chart should return score');
+  if (typeof mc1.rewardCash !== 'number') throw new Error('minigame chart should return rewardCash');
+  const expectedCash = cashBeforeChart + (mc1.score ?? 0) * 25;
+  if (Math.abs(sim.cash - expectedCash) > 1e-6) throw new Error('minigame chart cash reward mismatch: ' + sim.cash);
+
+  const mc2 = minigameMod.runMinigame(sim, 'mood');
+  if (!mc2.ok) throw new Error('minigame mood should succeed');
+  if (mc2.rewardMood !== 15) throw new Error('minigame mood should reward +15');
+  if (sim.life.mood < moodBeforeChart) throw new Error('minigame mood should raise mood');
+
+  const mc3 = minigameMod.runMinigame(sim, 'unknown_kind');
+  if (mc3.ok) throw new Error('unknown minigame kind should fail');
+
+  console.log('minigame: chart ok | mood ok | unknown fail');
+}
+
+// ---------- Phase 13: meta (rumah / kredit / bangkrut) ----------
+{
+  const sim = freshSim();
+
+  // ---- normalize ----
+  const normM = metaMod.normalizeMeta({ bankrupt: true, mortgageAssetId: 'house_villa', loan: 'x' });
+  if (normM.bankrupt !== true || normM.mortgageAssetId !== 'house_villa' || normM.loan !== 0)
+    throw new Error('normalizeMeta should sanitize: ' + JSON.stringify(normM));
+  if (metaMod.normalizeMeta(undefined).bankrupt !== false) throw new Error('normalizeMeta(undefined) should default');
+
+  // ---- take mortgage: butuh aset dimiliki ----
+  const badMt = metaMod.takeMortgage(sim, 'island_pulau');
+  if (badMt.ok) throw new Error('mortgage on unowned asset should fail');
+  sim.lifestyle.owned.push('house_basic');
+  sim.cash = 200_000;
+  const mt = metaMod.takeMortgage(sim, 'house_basic');
+  if (!mt.ok) throw new Error('mortgage should succeed with enough cash: ' + mt.msg);
+  if (sim.meta.loan <= 0) throw new Error('mortgage should set loan > 0');
+
+  // ---- pay off loan ----
+  const po = metaMod.payOffLoan(sim);
+  if (!po.ok) throw new Error('payOffLoan should succeed: ' + po.msg);
+  if (sim.meta.loan !== 0) throw new Error('loan should be cleared after payOffLoan');
+
+  // ---- isBankrupt: loan > 5x cash → bangkrut ----
+  sim.meta = { bankrupt: false, mortgageAssetId: null, loan: 1_000_000 };
+  if (!metaMod.isBankrupt(sim)) throw new Error('should be bankrupt when loan > 5x cash');
+  sim.meta = { bankrupt: true, mortgageAssetId: null, loan: 0 };
+  if (!metaMod.isBankrupt(sim)) throw new Error('explicit bankrupt flag should hold');
+
+  console.log('meta: mortgage/payoff/bankrupt ok');
 }

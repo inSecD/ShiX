@@ -3,6 +3,8 @@ import { useStore } from '../store';
 import { STRATEGY_LABEL } from '../sim/bots';
 import { chatCooldownLeft, friendshipOf, npcsAtLocation } from '../sim/social';
 import { postCooldownLeft } from '../sim/profile';
+import { LifePanel } from './LifePanel';
+import { EncounterDialog, QuestPanel, RelationshipPanel, MinigamePanel, MetaPanel } from './HubExtras';
 import {
   LOCATIONS,
   LOCATION_BY_ID,
@@ -426,6 +428,8 @@ export function WorldHubView() {
         </div>
       </div>
 
+      <EncounterDialog />
+
       <div className="panel">
         <div className="panel-head">
           <span>🐦 CT Feed</span>
@@ -510,6 +514,8 @@ export function WorldHubView() {
         </div>
       </div>
 
+      <LifePanel />
+
       {npcs.length > 0 && (
         <div className="panel">
           <div className="panel-head">
@@ -565,6 +571,14 @@ export function WorldHubView() {
           </div>
         </div>
       ) : null}
+
+      <QuestPanel />
+
+      <RelationshipPanel />
+
+      <MinigamePanel />
+
+      <MetaPanel />
 
       <div className="panel">
         <div className="panel-head">
