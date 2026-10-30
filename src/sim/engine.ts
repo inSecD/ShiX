@@ -19,6 +19,7 @@ import { createLife, lifeTick } from './life';
 import { createEncounter } from './encounter';
 import { createQuest } from './quest';
 import { createRelationship } from './relationship';
+import { createStory, chaosOf } from './story';
 import { createFeed, feedTick } from './feed';
 import { tradeFeeMult } from './life';
 import { createProfile, profileTick } from './profile';
@@ -202,6 +203,8 @@ export function createSim(settings: Settings): SimState {
     social: createSocial(),
     feed: createFeed(),
     profile: createProfile(),
+    chaos: 0.3,
+    story: createStory(),
     pendingEvent: null
   };
 
@@ -223,7 +226,7 @@ export function tick(state: SimState, settings: Settings, warmup = false): void 
   state.simTime += HOUR;
   state.ticks += 1;
 
-  updateMacro(state, rng);
+  updateMacro(state, rng, settings.difficulty);
 
   if (state.simTime >= state.nextEventAt) {
     if (state.pendingEvent) {
@@ -298,8 +301,11 @@ export function tick(state: SimState, settings: Settings, warmup = false): void 
   state.rngState = rng.state;
 }
 
-function updateMacro(state: SimState, rng: RNG): void {
+function updateMacro(state: SimState, rng: RNG, difficulty: string): void {
   const m = state.macro;
+
+  // chaos (Phase 11): berasal dari tingkat risiko makro + kesulitan — mempengaruhi event
+  state.chaos = chaosOf(state, difficulty);
 
   if (rng.chance(0.0035)) {
     const next = REGIMES[rng.weightedIndex(REGIMES.map((r) => r.prob))];

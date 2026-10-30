@@ -29,6 +29,7 @@ import * as lifeMod from '../src/sim/life';
 import * as encounterMod from '../src/sim/encounter';
 import * as questMod from '../src/sim/quest';
 import * as relationshipMod from '../src/sim/relationship';
+import * as storyMod from '../src/sim/story';
 import * as feedMod from '../src/sim/feed';
 import * as perksMod from '../src/sim/perks';
 import * as profileMod from '../src/sim/profile';
@@ -1245,5 +1246,44 @@ function openLong(sim: SimState) {
 
   console.log(
     'relationship: dating(ok/friendship60) | marry(ok/cash20k) | divorce(ok) | married kids bill ok (' + want + ') | normalize: ok'
+  );
+}
+
+// ---------- Phase 11: cerita & chaos ----------
+{
+  const sim = freshSim();
+
+  // ---- chaos: berasal dari risk makro + kesulitan ----
+  sim.macro.risk = 0.05;
+  const c1 = storyMod.chaosOf(sim, 'normal');
+  if (Math.abs(c1 - 0.25) > 1e-9) throw new Error('chaos should be 0.25 at risk 0.05/normal, got ' + c1);
+  sim.macro.risk = 0.05;
+  const c2 = storyMod.chaosOf(sim, 'easy');
+  if (Math.abs(c2 - 0.175) > 1e-9) throw new Error('chaos should scale down for easy, got ' + c2);
+  sim.macro.risk = 0.05;
+  const c3 = storyMod.chaosOf(sim, 'brutal');
+  if (Math.abs(c3 - 0.4) > 1e-9) throw new Error('chaos should scale up for brutal, got ' + c3);
+
+  // ---- story: beat kecil → arc tetap; beat besar → arc naik ----
+  sim.story = storyMod.createStory();
+  sim.story.progress = 100;
+  let beat1 = storyMod.applyStoryBeat(sim, 0.05, sim.simTime);
+  if (beat1.arc !== 'Awal') throw new Error('small beat should keep arc Awal, got ' + beat1.arc);
+  sim.story.progress = 200;
+  let beat2 = storyMod.applyStoryBeat(sim, 0.9, sim.simTime);
+  if (beat2.arc !== 'Bull Market') throw new Error('beat 0.9 from progress 200 should escalate to Bull Market, got ' + beat2.arc);
+  sim.story.progress = 600;
+  let beat3 = storyMod.applyStoryBeat(sim, 1.4, sim.simTime);
+  if (beat3.arc !== 'Bear Market') throw new Error('beat 1.4 from progress 600 should escalate to Bear Market, got ' + beat3.arc);
+
+  // ---- chaos nyasaran event: impact event naik dgn chaos ----
+  const sim2 = freshSim();
+  sim2.chaos = 0.3;
+  const beforeChaos = sim2.chaos;
+  if (Math.abs(beforeChaos - 0.3) > 1e-9) throw new Error('freshSim should init chaos 0.3, got ' + beforeChaos);
+  if (sim2.story.arc !== 'Awal') throw new Error('freshSim should init story Awal, got ' + sim2.story.arc);
+
+  console.log(
+    'story & chaos: chaos 0.25(n)/0.175(e)/0.4(b) | beats krisis/bull ok | init chaos/story ok'
   );
 }

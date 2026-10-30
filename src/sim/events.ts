@@ -1,6 +1,7 @@
 import type { RNG } from './rng';
 import { CURRENCIES } from './names';
 import type { AssetClass, GameEvent, MacroState, PendingEvent, Severity, SimState } from './types';
+import { applyStoryBeat } from './story';
 
 type Scope = 'macro' | 'inst' | 'sector' | 'class' | 'global';
 
@@ -533,7 +534,7 @@ export function generateEvent(state: SimState, rng: RNG): PendingEvent | null {
   const weights = pool.map((t) => t.weight);
   const tpl = pool[rng.weightedIndex(weights)];
 
-  const impact = tpl.impact * rng.float(0.6, 1.5) * 0.28;
+  const impact = tpl.impact * rng.float(0.6, 1.5) * 0.28 * (1 + state.chaos * 0.5);
   const bps = rng.pick([25, 50, 75, 100]);
   const ccy = rng.pick(CURRENCIES.filter((c) => c.code !== 'USD'));
   const sector = rng.pick(SECTOR_POOL);
@@ -581,6 +582,9 @@ export function applyEvent(state: SimState, pending: PendingEvent): void {
   const m = pending.macro;
 
   pending.ev.t = state.simTime;
+
+  // cerita & chaos (Phase 11): beat cerita naik tiap event besar
+  applyStoryBeat(state, impact, state.simTime);
 
   // apply macro effects
   if (m.rate) state.macro.rate = Math.max(0.25, state.macro.rate + m.rate);
