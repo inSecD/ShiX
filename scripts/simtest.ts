@@ -26,6 +26,8 @@ import * as hubMod from '../src/sim/hub';
 import * as socialMod from '../src/sim/social';
 import * as businessMod from '../src/sim/business';
 import * as lifeMod from '../src/sim/life';
+import * as encounterMod from '../src/sim/encounter';
+import * as questMod from '../src/sim/quest';
 import * as feedMod from '../src/sim/feed';
 import * as perksMod from '../src/sim/perks';
 import * as profileMod from '../src/sim/profile';
@@ -1028,5 +1030,154 @@ function openLong(sim: SimState) {
     'life: wage 75/6j ok | XP karier:', Math.floor(L.jobXp),
     '| tidur pulih: ok | fee fit', feeFit.toFixed(2), '→ capek', tiredMult.toFixed(2),
     '| tagihan/hari:', lifeMod.DAILY_COST, '| utang: auto-lunas | jajan: ok | karier unlock: ok | normalize: ok'
+  );
+}
+
+// ---------- Phase 9: eksplorasi & encounter (random + side quest berjenjang) ----------
+{
+  const sim = freshSim();
+  const rng = new RNG(999);
+
+  // ---- maybeEncounter: paksa kena (chance tinggi) pas travel ----
+  sim.encounter.lastTick = -999;
+  let triggered = null;
+  // coba beberapa kali sampai kena (chance 0.34)
+  for (let i = 0; i < 50 && !triggered; i++) {
+    sim.encounter.lastTick = -999;
+    triggered = encounterMod.maybeEncounter(sim, rng, 'travel');
+  }
+  if (!triggered) throw new Error('encounter should trigger within 50 travel attempts');
+  if (!sim.encounter.pending) throw new Error('triggered encounter should be pending');
+  const pendingId = sim.encounter.pending.defId;
+  const def = encounterMod.encounterDef(pendingId);
+  if (!def) throw new Error('pending encounter def should exist');
+
+  // pending → maybeEncounter lagi harus return null (nggak dobel)
+  sim.encounter.lastTick = -999;
+  if (encounterMod.maybeEncounter(sim, rng, 'travel')) throw new Error('should not trigger while one is pending');
+
+  // resolve pilihan pertama
+  const cashBefore = sim.cash;
+  const moodBefore = sim.life.mood;
+  const res = encounterMod.resolveEncounter(sim, rng, 0);
+  if (!res.ok) throw new Error('resolveEncounter failed: ' + res.msg);
+  if (sim.encounter.pending) throw new Error('pending should clear after resolve');
+  void cashBefore;
+  void moodBefore;
+
+  // resolve tanpa pending → error
+  if (encounterMod.resolveEncounter(sim, rng, 0).ok) throw new Error('resolve without pending should fail');
+
+  // ---- side quest: terima, progres via bump, klaim tahap demi tahap ----
+  const q = sim.quests;
+  // 'kenalan' butuh friendship 5 sama bot_9 (Sinta)
+  sim.social.friendship['bot_9'] = 10;
+
+  // misi nggak ada → tolak
+  if (questMod.acceptQuest(sim, 'nggak_ada').ok) throw new Error('unknown quest should be rejected');
+  // friendship kurang → tolak (reset dulu)
+  sim.social.friendship['bot_9'] = 0;
+  if (questMod.acceptQuest(sim, 'kenalan').ok) throw new Error('quest with low friendship should be rejected');
+  // friendship cukup → terima
+  sim.social.friendship['bot_9'] = 10;
+  const acc = questMod.acceptQuest(sim, 'kenalan');
+  if (!acc.ok) throw new Error('acceptQuest failed: ' + acc.msg);
+  // dobel terima → tolak
+  if (questMod.acceptQuest(sim, 'kenalan').ok) throw new Error('double accept should fail');
+
+  const aq = q.active.find((a) => a.defId === 'kenalan');
+  if (!aq) throw new Error('kenalan quest should be active');
+  const defK = questMod.questById('kenalan')!;
+  // tahap 0: chat 2x
+  const stage0 = defK.stages[0];
+  questMod.bumpQuest(sim, 'chat', 'bot_0');
+  questMod.bumpQuest(sim, 'chat', 'bot_1');
+  if (!questMod.stageDone(sim, aq, stage0)) throw new Error('chat x2 should complete stage 0');
+  // bump lain (visit) nggak ngaruh ke tahap chat
+  questMod.bumpQuest(sim, 'visit', 'park');
+  const pAfterWrong = aq.progress;
+  if (pAfterWrong !== 2) throw new Error('wrong-kind bump should not increase chat progress, got ' + pAfterWrong);
+
+  // klaim tahap 0 → lanjut tahap 1 (visit 3 lokasi)
+  const cashQ = sim.cash;
+  const claim0 = questMod.claimQuest(sim, 'kenalan');
+  if (!claim0.ok) throw new Error('claim stage0 failed: ' + claim0.msg);
+  if (Math.abs(sim.cash - (cashQ + 150)) > 1e-6) throw new Error('stage0 reward should be +150 cash');
+  if (aq.stage !== 1) throw new Error('should advance to stage 1, got ' + aq.stage);
+  if (aq.progress !== 0) throw new Error('progress should reset on stage advance');
+
+  // klaim lagi sebelum selesai → tolak
+  if (questMod.claimQuest(sim, 'kenalan').ok) throw new Error('claim before done should fail');
+
+  // tahap 1: visit 3 lokasi
+  const stage1 = defK.stages[1];
+  questMod.bumpQuest(sim, 'visit', 'park');
+  questMod.bumpQuest(sim, 'visit', 'cafe');
+  questMod.bumpQuest(sim, 'visit', 'street');
+  if (!questMod.stageDone(sim, aq, stage1)) throw new Error('visit x3 should complete stage 1');
+  const claim1 = questMod.claimQuest(sim, 'kenalan');
+  if (!claim1.ok) throw new Error('claim final stage failed: ' + claim1.msg);
+  if (!q.completed.includes('kenalan')) throw new Error('quest should be marked completed');
+  if (q.active.some((a) => a.defId === 'kenalan')) throw new Error('completed quest should leave active list');
+
+  // ---- quest kind absolut: followers (dicek langsung dari state) ----
+  sim.social.friendship['bot_2'] = 20; // DegenBoy buka 'konten'
+  const accC = questMod.acceptQuest(sim, 'konten');
+  if (!accC.ok) throw new Error('konten quest should be accepted: ' + accC.msg);
+  const aqC = q.active.find((a) => a.defId === 'konten')!;
+  const defC = questMod.questById('konten')!;
+  // tahap 0: post 3x (counter)
+  questMod.bumpQuest(sim, 'post');
+  questMod.bumpQuest(sim, 'post');
+  questMod.bumpQuest(sim, 'post');
+  if (!questMod.stageDone(sim, aqC, defC.stages[0])) throw new Error('post x3 should complete konten stage 0');
+  questMod.claimQuest(sim, 'konten');
+  // tahap 1: like 8x
+  for (let i = 0; i < 8; i++) questMod.bumpQuest(sim, 'like');
+  if (!questMod.stageDone(sim, aqC, defC.stages[1])) throw new Error('like x8 should complete konten stage 1');
+  questMod.claimQuest(sim, 'konten');
+  // tahap 2: followers >= 150 (absolut)
+  const stageFollow = defC.stages[2];
+  sim.profile.followers = 100;
+  if (questMod.stageDone(sim, aqC, stageFollow)) throw new Error('100 followers should NOT complete 150-followers goal');
+  sim.profile.followers = 160;
+  if (!questMod.stageDone(sim, aqC, stageFollow)) throw new Error('160 followers should complete 150-followers goal');
+  const claimC = questMod.claimQuest(sim, 'konten');
+  if (!claimC.ok) throw new Error('claim konten final failed: ' + claimC.msg);
+
+  // ---- abandon ----
+  sim.social.friendship['bot_0'] = 20;
+  questMod.acceptQuest(sim, 'jaringan');
+  const aband = questMod.abandonQuest(sim, 'jaringan');
+  if (!aband.ok) throw new Error('abandon should succeed');
+  if (q.active.some((a) => a.defId === 'jaringan')) throw new Error('abandoned quest should leave active');
+
+  // ---- questOfNpc: availability by friendship & status ----
+  sim.social.friendship['bot_0'] = 20;
+  const offered = questMod.questOfNpc(sim, 'bot_0');
+  if (!offered) throw new Error('bot_0 should offer jaringan (friendship 20)');
+  // completed quest nggak ditawarin lagi (jaringan udah abandon, bukan completed — harusnya masih ditawar)
+  // set completed → nggak ditawar
+  q.completed.push('jaringan');
+  if (questMod.questOfNpc(sim, 'bot_0')) throw new Error('completed quest should not be re-offered');
+
+  // ---- normalize: save lama tanpa encounter/quest, nilai rusak ----
+  const normEnc = encounterMod.normalizeEncounter({ pending: { defId: 'ghost' }, lastTick: 'x', seen: { whale: 'zz' }, total: -5 });
+  if (normEnc.pending?.defId !== 'ghost' || normEnc.lastTick !== -999 || normEnc.total !== 0 || normEnc.seen['whale'] !== 0)
+    throw new Error('normalizeEncounter should sanitize: ' + JSON.stringify(normEnc));
+  if (encounterMod.normalizeEncounter(undefined).pending !== null) throw new Error('normalizeEncounter(undefined) should default');
+
+  const normQ = questMod.normalizeQuest({ active: [{ defId: 'nggak_ada', stage: 9, progress: 'x' }, { defId: 'kenalan', stage: 99, progress: -4 }], completed: ['nggak_ada', 'konten'] });
+  // active quest nggak_ada dibuang; kenalan stage di-clamp
+  if (normQ.active.length !== 1 || normQ.active[0].defId !== 'kenalan')
+    throw new Error('normalizeQuest should drop unknown active quests');
+  if (normQ.active[0].stage !== 1) throw new Error('normalizeQuest should clamp stage, got ' + normQ.active[0].stage);
+  if (normQ.active[0].progress !== 0) throw new Error('normalizeQuest should reset negative progress');
+  if (normQ.completed.includes('nggak_ada') || !normQ.completed.includes('konten'))
+    throw new Error('normalizeQuest should drop unknown completed ids');
+
+  console.log(
+    'encounter: travel trigger ok (' + def.icon + ' ' + def.title + ') | resolve ok | pending clear: ok',
+    '| quest: kenalan 2 tahap klaim ok | konten followers-absolut ok | abandon ok | normalize: ok'
   );
 }

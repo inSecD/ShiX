@@ -16,6 +16,8 @@ import { createHub } from './hub';
 import { createSocial } from './social';
 import { businessesValue, businessTick, createBusiness } from './business';
 import { createLife, lifeTick } from './life';
+import { createEncounter } from './encounter';
+import { createQuest } from './quest';
 import { createFeed, feedTick } from './feed';
 import { tradeFeeMult } from './life';
 import { createProfile, profileTick } from './profile';
@@ -193,6 +195,8 @@ export function createSim(settings: Settings): SimState {
     hub: createHub(),
     business: createBusiness(),
     life: createLife(),
+    encounter: createEncounter(),
+    quests: createQuest(),
     social: createSocial(),
     feed: createFeed(),
     profile: createProfile(),

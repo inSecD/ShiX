@@ -36,6 +36,15 @@ import {
   toggleShift
 } from './sim/life';
 import { normalizeProfile, publishPost, toggleFollow } from './sim/profile';
+import { normalizeEncounter, maybeEncounter, resolveEncounter } from './sim/encounter';
+import {
+  acceptQuest,
+  abandonQuest,
+  bumpQuest,
+  claimQuest,
+  normalizeQuest,
+  questOfNpc
+} from './sim/quest';
 import { LOCATION_BY_ID, isLocationUnlocked, locationHint, normalizeHub } from './sim/hub';
 import { chatWith, normalizeSocial } from './sim/social';
 import { clearState, loadState, saveState } from './lib/persist';
@@ -175,6 +184,8 @@ function normalizeSim(sim: SimState, startingCash: number): SimState {
   sim.hub = normalizeHub(sim.hub);
   sim.business = normalizeBusiness(sim.business, sim.ticks);
   sim.life = normalizeLife(sim.life);
+  sim.encounter = normalizeEncounter(sim.encounter);
+  sim.quests = normalizeQuest(sim.quests);
   sim.social = normalizeSocial(sim.social);
   sim.feed = normalizeFeed(sim.feed);
   sim.profile = normalizeProfile(sim.profile);
@@ -359,6 +370,11 @@ interface Store {
   lifeSleep: () => void;
   lifeSnack: () => void;
 
+  encounterChoose: (idx: number) => void;
+  questAccept: (defId: string) => void;
+  questAbandon: (defId: string) => void;
+  questClaim: (defId: string) => void;
+
   npcChat: (botId: string) => void;
 
   reset: (seed?: number, cash?: number) => void;
@@ -512,6 +528,7 @@ export const useStore = create<Store>((set, get) => ({
     const res = placeOrder(sim, settings, p);
     if (res.ok) sim.progress.bought = true;
     notify(res.msg, res.ok ? 'ok' : 'err');
+    if (res.ok) bumpQuest(sim, 'trade');
     set((s) => ({ v: s.v + 1 }));
   },
 
@@ -540,6 +557,7 @@ export const useStore = create<Store>((set, get) => ({
     const res = buySpot(sim, settings, instId, usd);
     if (res.ok) sim.progress.bought = true;
     notify(res.msg, res.ok ? 'ok' : 'err');
+    if (res.ok) bumpQuest(sim, 'trade');
     set((s) => ({ v: s.v + 1 }));
   },
 
@@ -547,6 +565,7 @@ export const useStore = create<Store>((set, get) => ({
     const { sim, settings, notify } = get();
     const res = sellSpot(sim, settings, instId, qty);
     notify(res.msg, res.ok ? 'ok' : 'err');
+    if (res.ok) bumpQuest(sim, 'trade');
     set((s) => ({ v: s.v + 1 }));
   },
 
@@ -792,6 +811,7 @@ export const useStore = create<Store>((set, get) => ({
     const { sim, notify } = get();
     const res = publishPost(sim, text, media);
     notify(res.msg, res.ok ? 'ok' : 'err');
+    if (res.ok) bumpQuest(sim, 'post');
     set((s) => ({ v: s.v + 1 }));
   },
 
@@ -799,13 +819,15 @@ export const useStore = create<Store>((set, get) => ({
     const { sim, notify } = get();
     const res = toggleFollow(sim, botId);
     notify(res.msg, res.ok ? 'ok' : 'err');
+    if (res.ok) bumpQuest(sim, 'follow', botId);
     set((s) => ({ v: s.v + 1 }));
   },
 
   // like/repost ala X — diam-diem aja, nggak usah toast
   likePost: (postId) => {
     const { sim } = get();
-    toggleLike(sim, postId);
+    const res = toggleLike(sim, postId);
+    if (res.ok && res.msg === 'Disukai') bumpQuest(sim, 'like');
     set((s) => ({ v: s.v + 1 }));
   },
 
@@ -828,6 +850,15 @@ export const useStore = create<Store>((set, get) => ({
     hub.locId = locId;
     if (!hub.visited.includes(locId)) hub.visited.push(locId);
     notify(`${def.icon} ${def.name} · ${def.mood}`, 'ok');
+
+    // quest: progres "kunjungi lokasi"
+    bumpQuest(sim, 'visit', locId);
+
+    // encounter acak pas jalan
+    const encRng = new RNG((sim.rngState ^ Date.now()) >>> 0);
+    const enc = maybeEncounter(sim, encRng, 'travel');
+    if (enc) notify(`${enc.icon} ${enc.title}`, 'ok');
+
     set((s) => ({ v: s.v + 1 }));
   },
 
@@ -866,10 +897,50 @@ export const useStore = create<Store>((set, get) => ({
     set((s) => ({ v: s.v + 1 }));
   },
 
+  encounterChoose: (idx) => {
+    const { sim, notify } = get();
+    const encRng = new RNG((sim.rngState ^ Date.now()) >>> 0);
+    const res = resolveEncounter(sim, encRng, idx);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  questAccept: (defId) => {
+    const { sim, notify } = get();
+    const res = acceptQuest(sim, defId);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  questAbandon: (defId) => {
+    const { sim, notify } = get();
+    const res = abandonQuest(sim, defId);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  questClaim: (defId) => {
+    const { sim, notify } = get();
+    const res = claimQuest(sim, defId);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
   npcChat: (botId) => {
     const { sim, notify } = get();
     const res = chatWith(sim, botId);
     notify(res.msg, res.ok ? 'ok' : 'err');
+    if (res.ok) {
+      // quest: progres "ngobrol"
+      bumpQuest(sim, 'chat', botId);
+      // encounter acak pas ngobrol
+      const encRng = new RNG((sim.rngState ^ Date.now()) >>> 0);
+      const enc = maybeEncounter(sim, encRng, 'chat');
+      if (enc) notify(`${enc.icon} ${enc.title}`, 'ok');
+      // misi baru dari NPC (kalo friendship cukup)
+      const q = questOfNpc(sim, botId);
+      if (q) notify(`📋 ${sim.bots.find((b) => b.id === botId)?.name ?? ''} punya misi: ${q.title}`, 'ok');
+    }
     set((s) => ({ v: s.v + 1 }));
   },
 

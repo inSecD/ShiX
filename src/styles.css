@@ -3136,6 +3136,135 @@ input[type='range']::-webkit-slider-thumb {
   display: block;
 }
 
+/* ---------- Encounter & Misi Sampingan (Fase 9) ---------- */
+.enc-panel {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(77, 141, 255, 0.2);
+}
+
+.enc-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.enc-title {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.enc-scene {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text, #c7d3e6);
+  background: #10182a;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.enc-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.enc-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  padding: 8px 10px;
+  background: #141c2e;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.enc-choice:hover {
+  border-color: var(--accent);
+  background: rgba(77, 141, 255, 0.08);
+}
+
+.enc-choice-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text, #c7d3e6);
+}
+
+.enc-choice-hint {
+  font-size: 10.5px;
+  color: var(--dim);
+}
+
+.quest-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.quest-card {
+  padding: 8px 10px;
+  background: #10182a;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.quest-card.avail {
+  border-style: dashed;
+  background: transparent;
+}
+
+.quest-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.quest-stage {
+  font-size: 12px;
+  color: var(--text, #c7d3e6);
+  margin-bottom: 6px;
+}
+
+.quest-prog {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.quest-prog-bar {
+  flex: 1;
+  height: 6px;
+  background: #0c1322;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.quest-prog-bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 0.3s;
+}
+
+.quest-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.accent-btn {
+  background: var(--accent) !important;
+  color: #0a0f1a !important;
+  font-weight: 700;
+}
+
 /* ---------- Tab CT ala X (Fase 7) ---------- */
 .sx {
   max-width: 620px;
