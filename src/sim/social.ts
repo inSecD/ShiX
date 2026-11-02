@@ -84,6 +84,13 @@ export function npcsAtLocation(state: SimState, locId: string): Bot[] {
   return state.bots.filter((b) => NPC_AT[b.id] === locId);
 }
 
+/** NPC pertama yang lagi di lokasi itu — buat pembuka dialog saat encounter muncul */
+export function npcAtLocation(state: SimState, locId: string): Bot | undefined {
+  const botId = Object.keys(NPC_AT).find((k) => NPC_AT[k] === locId);
+  if (!botId) return undefined;
+  return state.bots.find((b) => b.id === botId);
+}
+
 export function chatCooldownLeft(state: SimState, botId: string): number {
   const last = state.social.lastChat[botId];
   if (last == null) return 0;

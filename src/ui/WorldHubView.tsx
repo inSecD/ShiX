@@ -4,7 +4,8 @@ import { STRATEGY_LABEL } from '../sim/bots';
 import { chatCooldownLeft, friendshipOf, npcsAtLocation } from '../sim/social';
 import { postCooldownLeft } from '../sim/profile';
 import { LifePanel } from './LifePanel';
-import { EncounterDialog, QuestPanel, RelationshipPanel, MinigamePanel, MetaPanel } from './HubExtras';
+import { QuestPanel, RelationshipPanel, MinigamePanel, MetaPanel } from './HubExtras';
+import { VNDialog } from './VNDialog';
 import {
   LOCATIONS,
   LOCATION_BY_ID,
@@ -52,6 +53,16 @@ interface MarkerHit {
   y: number;
   r: number;
   unlocked: boolean;
+}
+
+/** Phase 14: tap di dalam area gedung → nggak jalan ke sana */
+function insideBuilding(cx: number, cy: number): boolean {
+  for (const b of BUILDINGS) {
+    const top = 56 - b.h;
+    const bottom = top + b.h + 20;
+    if (cx >= b.x && cx <= b.x + b.w && cy >= top && cy <= bottom) return true;
+  }
+  return false;
 }
 
 /** "3j lalu" dari selisih milidetik */
@@ -399,7 +410,12 @@ export function WorldHubView() {
         bestD = d;
       }
     }
-    if (!best) return;
+    if (!best) {
+      // Phase 14: jalan bebas di kota — tap di tanah → target pergi ke sana
+      if (insideBuilding(cx, cy) || cy > 68) return;
+      targetRef.current = { x: cx, y: cy, id: locId };
+      return;
+    }
 
     const def = LOCATION_BY_ID[best.id];
     if (!best.unlocked) {
@@ -424,11 +440,11 @@ export function WorldHubView() {
         </div>
         <div className="hub-map" ref={wrapRef}>
           <canvas ref={canvasRef} className="hub-canvas" onPointerDown={onPointer} />
-          <div className="hub-hint">Tap pin buat jalan ke lokasi</div>
+          <div className="hub-hint">Tap pin atau tanah buat jalan ke lokasi</div>
         </div>
       </div>
 
-      <EncounterDialog />
+      <VNDialog />
 
       <div className="panel">
         <div className="panel-head">

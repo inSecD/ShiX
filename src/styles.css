@@ -3198,6 +3198,126 @@ input[type='range']::-webkit-slider-thumb {
   color: var(--dim);
 }
 
+/* ---------- VN Dialog (Phase 14 — V3.5) ---------- */
+.vn-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(4, 8, 16, 0.72);
+  backdrop-filter: blur(2px);
+}
+
+.vn-box {
+  width: 100%;
+  max-width: 420px;
+  background: #0d1424;
+  border: 1px solid rgba(77, 141, 255, 0.35);
+  border-bottom: none;
+  border-radius: 14px 14px 0 0;
+  padding: 12px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: vn-in 0.18s ease-out;
+}
+
+@keyframes vn-in {
+  from { transform: translateY(14px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.vn-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.vn-speaker {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--accent, #4d8dff);
+}
+
+.vn-close {
+  background: none;
+  border: none;
+  color: var(--dim);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.vn-text {
+  font-size: 13.5px;
+  line-height: 1.55;
+  min-height: 56px;
+  color: var(--text, #c7d3e6);
+}
+
+.vn-caret {
+  font-style: normal;
+  color: var(--accent, #4d8dff);
+  animation: vn-blink 0.8s steps(2) infinite;
+}
+
+@keyframes vn-blink {
+  50% { opacity: 0; }
+}
+
+.vn-next {
+  align-self: flex-end;
+  background: rgba(77, 141, 255, 0.12);
+  border: 1px solid rgba(77, 141, 255, 0.4);
+  color: var(--accent, #4d8dff);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.vn-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.vn-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  padding: 9px 11px;
+  background: #141c2e;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.vn-choice:hover {
+  border-color: var(--accent);
+  background: rgba(77, 141, 255, 0.08);
+}
+
+.vn-choice-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text, #c7d3e6);
+}
+
+.vn-choice-hint {
+  font-size: 10.5px;
+  color: var(--dim);
+}
+
+.tone-joy .vn-speaker,
+.tone-joy .vn-text { color: #7be3b0; }
+.tone-sad .vn-text { color: #e0a2c0; }
+.tone-think .vn-text { color: #9db8e8; font-style: italic; }
+
 .quest-body {
   display: flex;
   flex-direction: column;

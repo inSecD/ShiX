@@ -53,8 +53,19 @@ import {
 } from './sim/relationship';
 import { runMinigame } from './sim/minigame';
 import { normalizeMeta, payOffLoan, takeMortgage } from './sim/meta';
+import {
+  advanceDialogue,
+  closeDialogue,
+  linesForChat,
+  linesForEncounter,
+  normalizeDialogue,
+  pickChoice,
+  startDialogue
+} from './sim/dialogue';
+import type { EncounterChoice } from './sim/encounter';
+import type { VNLine } from './sim/dialogue';
 import { LOCATION_BY_ID, isLocationUnlocked, locationHint, normalizeHub } from './sim/hub';
-import { chatWith, normalizeSocial } from './sim/social';
+import { chatWith, normalizeSocial, npcAtLocation } from './sim/social';
 import { clearState, loadState, saveState } from './lib/persist';
 import type {
   AssetClass,
@@ -196,6 +207,7 @@ function normalizeSim(sim: SimState, startingCash: number): SimState {
   sim.quests = normalizeQuest(sim.quests);
   sim.relationship = normalizeRelationship(sim.relationship);
   sim.meta = normalizeMeta(sim.meta);
+  sim.dialogue = normalizeDialogue(sim.dialogue);
   sim.social = normalizeSocial(sim.social);
   sim.feed = normalizeFeed(sim.feed);
   sim.profile = normalizeProfile(sim.profile);
@@ -392,6 +404,11 @@ interface Store {
   minigamePlay: (kind: string) => void;
   takeMortgage: (assetId: string) => void;
   payOffLoan: () => void;
+
+  dialogueOpen: (npcId: string, lines: VNLine[], opts?: { choices?: EncounterChoice[]; src?: 'chat' | 'encounter'; encounterId?: string }) => void;
+  dialogueAdvance: () => void;
+  dialogueChoose: (idx: number) => void;
+  dialogueClose: () => void;
 
   npcChat: (botId: string) => void;
 
@@ -872,10 +889,18 @@ export const useStore = create<Store>((set, get) => ({
     // quest: progres "kunjungi lokasi"
     bumpQuest(sim, 'visit', locId);
 
-    // encounter acak pas jalan
+    // encounter acak pas jalan → otomatis buka VN dialog-nya
     const encRng = new RNG((sim.rngState ^ Date.now()) >>> 0);
     const enc = maybeEncounter(sim, encRng, 'travel');
-    if (enc) notify(`${enc.icon} ${enc.title}`, 'ok');
+    if (enc) {
+      notify(`${enc.icon} ${enc.title}`, 'ok');
+      const encNpcId = npcAtLocation(sim, locId)?.id ?? '';
+      startDialogue(sim, encNpcId, linesForEncounter(enc, encNpcId), {
+        choices: enc.choices,
+        src: 'encounter',
+        encounterId: enc.id
+      });
+    }
 
     set((s) => ({ v: s.v + 1 }));
   },
@@ -986,6 +1011,38 @@ export const useStore = create<Store>((set, get) => ({
     set((s) => ({ v: s.v + 1 }));
   },
 
+  dialogueOpen: (npcId, lines, opts) => {
+    const { sim } = get();
+    startDialogue(sim, npcId, lines, opts);
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  dialogueAdvance: () => {
+    const { sim } = get();
+    advanceDialogue(sim);
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  dialogueClose: () => {
+    const { sim } = get();
+    closeDialogue(sim);
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  dialogueChoose: (idx) => {
+    const { sim, notify } = get();
+    const d = sim.dialogue;
+    const ch = d.open ? pickChoice(sim, idx) : null;
+    if (!ch) return;
+    if (d.src === 'encounter') {
+      const encRng = new RNG((sim.rngState ^ Date.now()) >>> 0);
+      const res = resolveEncounter(sim, encRng, idx);
+      notify(res.msg, res.ok ? 'ok' : 'err');
+    }
+    closeDialogue(sim);
+    set((s) => ({ v: s.v + 1 }));
+  },
+
   npcChat: (botId) => {
     const { sim, notify } = get();
     const res = chatWith(sim, botId);
@@ -993,13 +1050,24 @@ export const useStore = create<Store>((set, get) => ({
     if (res.ok) {
       // quest: progres "ngobrol"
       bumpQuest(sim, 'chat', botId);
-      // encounter acak pas ngobrol
+      // encounter acak pas ngobrol → otomatis buka VN dialog-nya
       const encRng = new RNG((sim.rngState ^ Date.now()) >>> 0);
       const enc = maybeEncounter(sim, encRng, 'chat');
-      if (enc) notify(`${enc.icon} ${enc.title}`, 'ok');
+      if (enc) {
+        notify(`${enc.icon} ${enc.title}`, 'ok');
+        startDialogue(sim, botId, linesForEncounter(enc, botId), {
+          choices: enc.choices,
+          src: 'encounter',
+          encounterId: enc.id
+        });
+      }
       // misi baru dari NPC (kalo friendship cukup)
       const q = questOfNpc(sim, botId);
       if (q) notify(`📋 ${sim.bots.find((b) => b.id === botId)?.name ?? ''} punya misi: ${q.title}`, 'ok');
+      // kalau nggak ada encounter, buka VN dialog dari percakapan biasa
+      if (!enc) {
+        startDialogue(sim, botId, linesForChat(sim, botId, res), { src: 'chat' });
+      }
     }
     set((s) => ({ v: s.v + 1 }));
   },

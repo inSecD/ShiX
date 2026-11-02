@@ -32,6 +32,7 @@ import * as relationshipMod from '../src/sim/relationship';
 import * as storyMod from '../src/sim/story';
 import * as minigameMod from '../src/sim/minigame';
 import * as metaMod from '../src/sim/meta';
+import * as dialogueMod from '../src/sim/dialogue';
 import * as feedMod from '../src/sim/feed';
 import * as perksMod from '../src/sim/perks';
 import * as profileMod from '../src/sim/profile';
@@ -1345,4 +1346,46 @@ function openLong(sim: SimState) {
   if (!metaMod.isBankrupt(sim)) throw new Error('explicit bankrupt flag should hold');
 
   console.log('meta: mortgage/payoff/bankrupt ok');
+}
+
+// ---------- Phase 14: VN dialog & walkable town ----------
+{
+  const sim = freshSim();
+  const D = dialogueMod;
+
+  // ---- dialog: open → advance → close ----
+  const opened = D.startDialogue(sim, 'bot_0', [
+    { npcId: 'bot_0', text: 'Aria: "Lagi monitor momentum, nih."', tone: 'plain' },
+    { npcId: 'bot_0', text: 'Aria: "Kita santai dulu."', tone: 'plain' }
+  ]);
+  if (!opened.open) throw new Error('dialog should open');
+  const cur0 = D.currentLine(sim);
+  if (cur0?.text !== 'Aria: "Lagi monitor momentum, nih."') throw new Error('dialog line 0 wrong: ' + cur0?.text);
+  if (D.advanceDialogue(sim) !== true) throw new Error('dialog should advance');
+  const cur1 = D.currentLine(sim);
+  if (cur1?.text !== 'Aria: "Kita santai dulu."') throw new Error('dialog line 1 wrong');
+  if (D.advanceDialogue(sim) !== false) throw new Error('dialog should close at end');
+  if (sim.dialogue.open) throw new Error('dialog should be closed');
+
+  // ---- encounter: lines dari scene + choices open ----
+  const encDef = encounterMod.encounterDef('whale')!;
+  const encLines = D.linesForEncounter(encDef, 'bot_4');
+  if (encLines.length < 2) throw new Error('encounter lines should split scene, got ' + encLines.length);
+  if (encLines[encLines.length - 1].tone !== 'joy') throw new Error('encounter last line should be joy');
+  const encOpened = D.startDialogue(sim, 'bot_4', encLines, { choices: encDef.choices, src: 'encounter', encounterId: encDef.id });
+  if (!encOpened.open) throw new Error('encounter dialogue should open with choices');
+  if (D.availableChoices(sim).length !== encDef.choices.length) throw new Error('encounter choices should be available');
+
+  // pilihan → resolve (success/fail roll) → dialog tutup
+  const picked = D.pickChoice(sim, 1);
+  if (!picked || picked.label !== 'Tolak sopan, minta nasihat umum') throw new Error('choice pick wrong');
+  D.closeDialogue(sim);
+  if (sim.dialogue.open) throw new Error('dialog should close after choose');
+
+  // ---- chat: greeting + rumor → lines ----
+  const chatRes = socialMod.chatWith(sim, 'bot_0');
+  const chatLines = D.linesForChat(sim, 'bot_0', chatRes);
+  if (chatLines.length < 1) throw new Error('chat lines should have greeting');
+
+  console.log('vn dialog: open/advance/close ok | encounter lines ok | chat lines ok');
 }

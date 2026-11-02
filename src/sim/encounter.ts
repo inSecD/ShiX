@@ -333,7 +333,8 @@ export interface EncounterResult {
   msg: string;
 }
 
-function applyEffect(state: SimState, eff: EncounterEffect): void {
+/** apply efek konsekuensi (cash, mood, followers, dll) — diekspor supaya VN dialog + encounter share logic yang sama */
+export function applyEffect(state: SimState, eff: EncounterEffect): void {
   if (eff.cash) state.cash += eff.cash;
   const life = state.life;
   if (life) {
