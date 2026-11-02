@@ -123,13 +123,13 @@ export function pickChoice(state: SimState, idx: number): EncounterChoice | null
   return ch ?? null;
 }
 
-/** deretan VN baris dari percakapan chat (greeting + rumor kalau ada) */
+/** deretan VN baris dari percakapan chat (greeting + rumor + konteks NPC) */
 export function linesForChat(state: SimState, botId: string, res: ChatResult): VNLine[] {
   const bot = state.bots.find((b: Bot) => b.id === botId);
   const who = bot?.name ?? botId;
   const lines: VNLine[] = [];
-  if (res.ok) lines.push({ npcId: botId, text: res.msg, tone: 'plain' });
-  if (res.ok && res.rumor) lines.push({ npcId: botId, text: `Rumor dari ${who}: ${res.rumor}`, tone: 'think' });
+  const texts = res.ok ? res.lines ?? [res.msg] : [res.msg];
+  texts.forEach((text, i) => lines.push({ npcId: botId, text, tone: i === 0 ? ('plain' as const) : ('think' as const) }));
   if (lines.length === 0) lines.push({ npcId: botId, text: `${who} bilang nada.`, tone: 'plain' });
   return lines;
 }

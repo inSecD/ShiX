@@ -65,7 +65,7 @@ import {
 import type { EncounterChoice } from './sim/encounter';
 import type { VNLine } from './sim/dialogue';
 import { LOCATION_BY_ID, isLocationUnlocked, locationHint, normalizeHub } from './sim/hub';
-import { chatWith, normalizeSocial, npcAtLocation } from './sim/social';
+import { chatWith, normalizeSocial, npcAtLocation, rememberNpcEvent } from './sim/social';
 import { clearState, loadState, saveState } from './lib/persist';
 import type {
   AssetClass,
@@ -561,7 +561,14 @@ export const useStore = create<Store>((set, get) => ({
   order: (p) => {
     const { sim, settings, notify } = get();
     const res = placeOrder(sim, settings, p);
-    if (res.ok) sim.progress.bought = true;
+    if (res.ok) {
+      const instName = sim.instruments[p.instId]?.name ?? p.instId;
+      for (const b of sim.bots) {
+        const hold = b.holdings.find((h) => h.instId === p.instId);
+        if (hold) rememberNpcEvent(sim, b.id, 'trade', `${instName} → lo`);
+      }
+      sim.progress.bought = true;
+    }
     notify(res.msg, res.ok ? 'ok' : 'err');
     if (res.ok) bumpQuest(sim, 'trade');
     set((s) => ({ v: s.v + 1 }));
@@ -590,7 +597,14 @@ export const useStore = create<Store>((set, get) => ({
   spotBuy: (instId, usd) => {
     const { sim, settings, notify } = get();
     const res = buySpot(sim, settings, instId, usd);
-    if (res.ok) sim.progress.bought = true;
+    if (res.ok) {
+      const instName = sim.instruments[instId]?.name ?? instId;
+      for (const b of sim.bots) {
+        const hold = b.holdings.find((h) => h.instId === instId);
+        if (hold) rememberNpcEvent(sim, b.id, 'trade', `${instName} → lo`);
+      }
+      sim.progress.bought = true;
+    }
     notify(res.msg, res.ok ? 'ok' : 'err');
     if (res.ok) bumpQuest(sim, 'trade');
     set((s) => ({ v: s.v + 1 }));
@@ -599,6 +613,13 @@ export const useStore = create<Store>((set, get) => ({
   spotSell: (instId, qty) => {
     const { sim, settings, notify } = get();
     const res = sellSpot(sim, settings, instId, qty);
+    if (res.ok) {
+      const instName = sim.instruments[instId]?.name ?? instId;
+      for (const b of sim.bots) {
+        const hold = b.holdings.find((h) => h.instId === instId);
+        if (hold) rememberNpcEvent(sim, b.id, 'trade', `${instName} → lo`);
+      }
+    }
     notify(res.msg, res.ok ? 'ok' : 'err');
     if (res.ok) bumpQuest(sim, 'trade');
     set((s) => ({ v: s.v + 1 }));
@@ -945,6 +966,8 @@ export const useStore = create<Store>((set, get) => ({
     const encRng = new RNG((sim.rngState ^ Date.now()) >>> 0);
     const res = resolveEncounter(sim, encRng, idx);
     notify(res.msg, res.ok ? 'ok' : 'err');
+    const encNpc = sim.dialogue?.npcId;
+    if (encNpc) rememberNpcEvent(sim, encNpc, 'encounter', res.msg);
     set((s) => ({ v: s.v + 1 }));
   },
 

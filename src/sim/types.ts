@@ -164,6 +164,15 @@ export interface SocialState {
   met: string[];
   rumor: RumorState | null;
   lastConvo: ConvoState | null;
+  /** ingatan NPC tentang pemain (trade, encounter, rumor, quest) — buat bicara berbasis konteks */
+  npcMemory: Record<string, NpcMemoryEntry[]>;
+}
+
+/** satu catatan ingatan NPC tentang kejadian yang menyentuh pemain */
+export interface NpcMemoryEntry {
+  t: number;
+  ev: string;
+  text: string;
 }
 
 /** satu post di CT Feed — dibikin prosedural dari kejadian sim beneran */

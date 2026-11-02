@@ -1,4 +1,4 @@
-import type { Bot, BotStrategy, ConvoState, PendingEvent, SimState, SocialState } from './types';
+import type { Bot, BotStrategy, ConvoState, NpcMemoryEntry, PendingEvent, SimState, SocialState } from './types';
 import { perksOf } from './perks';
 
 /** lokasi tiap NPC nongol — nyambung ke unlock aset (Fase 1-2), jadi makin kaya makin banyak yang bisa ditemui */
@@ -41,7 +41,7 @@ const OPENER: Record<BotStrategy, string> = {
 export const CHAT_COOLDOWN = 6;
 
 export function createSocial(): SocialState {
-  return { friendship: {}, lastChat: {}, met: [], rumor: null, lastConvo: null };
+  return { friendship: {}, lastChat: {}, met: [], rumor: null, lastConvo: null, npcMemory: {} };
 }
 
 export function normalizeSocial(s: unknown): SocialState {
@@ -65,7 +65,58 @@ export function normalizeSocial(s: unknown): SocialState {
   const met = Array.isArray(x.met) ? x.met.filter((id): id is string => typeof id === 'string') : [];
   const rumor = x.rumor && typeof x.rumor === 'object' ? (x.rumor as SocialState['rumor']) : null;
   const lastConvo = x.lastConvo && typeof x.lastConvo === 'object' ? (x.lastConvo as ConvoState) : null;
-  return { friendship, lastChat, met, rumor, lastConvo };
+  const npcMemory: Record<string, NpcMemoryEntry[]> = {};
+  if (x.npcMemory && typeof x.npcMemory === 'object') {
+    for (const [k, v] of Object.entries(x.npcMemory)) {
+      if (!Array.isArray(v)) continue;
+      const clean = v
+        .filter((e) => e && typeof e.ev === 'string' && typeof e.text === 'string')
+        .map((e) => ({ t: Number(e.t) || 0, ev: e.ev, text: e.text }));
+      if (clean.length) npcMemory[k] = clean;
+    }
+  }
+  return { friendship, lastChat, met, rumor, lastConvo, npcMemory };
+}
+
+/** catat ingatan NPC tentang kejadian pemain */
+export function rememberNpcEvent(state: SimState, botId: string, ev: string, text: string): void {
+  if (!state.social.npcMemory) state.social.npcMemory = {};
+  const list = state.social.npcMemory[botId] ?? [];
+  list.push({ t: state.simTime, ev, text });
+  state.social.npcMemory[botId] = list;
+  if (list.length > 20) state.social.npcMemory[botId] = list.slice(-20);
+}
+
+/** entry ingatan NPC terakhir tentang pemain */
+export function lastNpcMemory(state: SimState, botId: string): NpcMemoryEntry | null {
+  const list = state.social.npcMemory?.[botId];
+  if (!list || list.length === 0) return null;
+  return list[list.length - 1];
+}
+
+/** respons NPC berbasis ingatan terakhir + konteks — "otak"-nya */
+export function npcContextLine(state: SimState, botId: string): string | null {
+  const mem = lastNpcMemory(state, botId);
+  if (!mem) return null;
+  const bot = state.bots.find((b) => b.id === botId);
+  const who = bot?.name ?? botId;
+  if (mem.ev === 'trade') {
+    const strat = bot?.strategy ?? 'momentum';
+    const react =
+      strat === 'panic'
+        ? `Gue denger trade lo kemarin bikin gue ngeri. Cash lo habis dikasih... hmm. Tapi pasar lagi move.`
+        : strat === 'degen'
+          ? `Trade lo kemarin brutal banget. Semoga cash-nya nggak cuma kenangan.`
+          : strat === 'whale'
+            ? `Trade lo kemarin... menarik. Lo punya risk tolerance yang rare.`
+            : `Trade lo kemarin mengotori pasar. Semua orang denger cerita lo sekarang.`;
+    return `${who} ingat trade lo: "${mem.text}". ${react}`;
+  }
+  if (mem.ev === 'encounter') return `${who} masih mikir kejadian tadi: "${mem.text}"`;
+  if (mem.ev === 'rumor') return `${who} ikut bercerita soal rumor terakhir: "${mem.text}"`;
+  if (mem.ev === 'quest') return `${who} cerita misi yang belum selesai: "${mem.text}"`;
+  if (mem.ev === 'chat') return `${who} masih mikir obrolan mereka kemarin.`;
+  return null;
 }
 
 export function friendshipOf(social: SocialState, botId: string): number {
@@ -124,6 +175,8 @@ export interface ChatResult {
   gain: number;
   rumor: string | null;
   wait?: number;
+  /** deretan baris VN dari respons NPC — greeting + rumor + konteks */
+  lines?: string[];
 }
 
 export function chatWith(state: SimState, botId: string): ChatResult {
@@ -154,5 +207,11 @@ export function chatWith(state: SimState, botId: string): ChatResult {
   const convo: ConvoState = { botId, greeting, rumor, gain, at: state.simTime };
   social.lastConvo = convo;
 
-  return { ok: true, msg: rumor ? `${greeting} — "${rumor}"` : greeting, gain, rumor };
+  // NPC brain (Phase 14 v2): respons = greeting + rumor + reaksi kontekstual dari ingatan
+  const ctx = npcContextLine(state, botId);
+  const lines = [greeting];
+  if (rumor) lines.push(rumor);
+  if (ctx) lines.push(ctx);
+  const msg = lines.join(' · ');
+  return { ok: true, msg, gain, rumor, lines };
 }

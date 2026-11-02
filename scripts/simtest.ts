@@ -1389,3 +1389,31 @@ function openLong(sim: SimState) {
 
   console.log('vn dialog: open/advance/close ok | encounter lines ok | chat lines ok');
 }
+
+// ---------- Phase 14 v2: NPC brain (memory + contextual response) ----------
+{
+  const sim = freshSim();
+  // ---- ingatan NPC + reaksi kontekstual ----
+  socialMod.rememberNpcEvent(sim, 'bot_0', 'trade', 'BN → lo');
+  const mem = socialMod.lastNpcMemory(sim, 'bot_0');
+  if (!mem || mem.ev !== 'trade') throw new Error('lastNpcMemory should return trade entry');
+  const ctxTrade = socialMod.npcContextLine(sim, 'bot_0');
+  if (!ctxTrade || !ctxTrade.includes('ingat trade')) throw new Error('npcContextLine should react to trade memory: ' + ctxTrade);
+
+  socialMod.rememberNpcEvent(sim, 'bot_0', 'encounter', 'whale encounter pasar');
+  const ctxEnc = socialMod.npcContextLine(sim, 'bot_0');
+  if (!ctxEnc || !ctxEnc.includes('mikir')) throw new Error('npcContextLine should react to encounter memory: ' + ctxEnc);
+
+  // ---- chat: respons NPC = greeting + rumor + konteks, berupa lines ----
+  const chatRes = socialMod.chatWith(sim, 'bot_0');
+  if (!chatRes.ok) throw new Error('chat should succeed');
+  if (!Array.isArray(chatRes.lines) || chatRes.lines.length < 1) throw new Error('chat should return lines');
+  const dl = dialogueMod.linesForChat(sim, 'bot_0', chatRes);
+  if (dl.length !== chatRes.lines!.length) throw new Error('linesForChat should map chat lines');
+
+  // ---- normalize: memory lama tanpa npcMemory tetap jalan ----
+  const normS = socialMod.normalizeSocial({ friendship: {}, lastChat: {}, met: [], rumor: null, lastConvo: null });
+  if (!normS.npcMemory || Object.keys(normS.npcMemory).length !== 0) throw new Error('normalizeSocial should default npcMemory empty');
+
+  console.log('npc brain: memory/trade+ctx ok | chat lines ok | normalize ok');
+}
