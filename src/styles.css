@@ -2686,6 +2686,61 @@ input[type='range']::-webkit-slider-thumb {
   line-height: 1.5;
 }
 
+/* ---------- Suasana venue (Phase 14 v4) ---------- */
+.venue-panel {
+  border-color: rgba(255, 179, 92, 0.18);
+}
+
+.venue-body {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.venue-vibe {
+  font-size: 12px;
+  font-style: italic;
+  color: var(--dim);
+  line-height: 1.5;
+}
+
+.venue-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.venue-chatter {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 8px 10px;
+  background: #0c111b;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.venue-chatter-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--dim);
+}
+
+.venue-chatter-line b {
+  color: var(--text);
+  font-weight: 600;
+  margin-right: 2px;
+}
+
+.venue-chatter-ico {
+  font-size: 15px;
+  flex: 0 0 auto;
+  line-height: 1.2;
+}
+
 .hub-explore {
   display: flex;
   flex-direction: column;

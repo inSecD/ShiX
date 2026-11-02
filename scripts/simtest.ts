@@ -33,6 +33,7 @@ import * as storyMod from '../src/sim/story';
 import * as minigameMod from '../src/sim/minigame';
 import * as metaMod from '../src/sim/meta';
 import * as dialogueMod from '../src/sim/dialogue';
+import * as ambienceMod from '../src/sim/ambience';
 import * as feedMod from '../src/sim/feed';
 import * as perksMod from '../src/sim/perks';
 import * as profileMod from '../src/sim/profile';
@@ -1425,4 +1426,44 @@ function openLong(sim: SimState) {
   const park = hubMod.LOCATION_BY_ID['park'];
   if (park?.indoor) throw new Error('park should stay outdoor');
   console.log('interior: cafe indoor ok | park outdoor ok');
+}
+
+// ---------- Phase 14 v4: interior crowd & ambience ----------
+{
+  const sim = freshSim();
+  const cafe = ambienceMod.venueScene(sim, 'cafe');
+  if (!cafe) throw new Error('cafe should have a venue scene');
+  if (cafe.crowd.length !== ambienceMod.VENUE_INFO.cafe.crowd) {
+    throw new Error(`cafe crowd should be ${ambienceMod.VENUE_INFO.cafe.crowd}, got ${cafe.crowd.length}`);
+  }
+  if (cafe.crowd.some((c) => socialMod.NPC_AT[c.id])) throw new Error('crowd should exclude named NPCs');
+
+  // deterministik: scene yang sama kalo dipanggil ulang
+  const cafeAgain = ambienceMod.venueScene(sim, 'cafe');
+  const idsA = cafe.crowd.map((c) => c.id).join(',');
+  const idsB = cafeAgain?.crowd.map((c) => c.id).join(',') ?? '';
+  if (idsA !== idsB) throw new Error('venue crowd should be deterministic per day');
+
+  // chatter: beberapa baris, stabil per slot, ada konteks pasar
+  const chatter = ambienceMod.venueChatter(sim, 'cafe', 0);
+  const chatterAgain = ambienceMod.venueChatter(sim, 'cafe', 0);
+  const chatA = chatter.map((c) => c.text).join('|');
+  const chatB = chatterAgain.map((c) => c.text).join('|');
+  if (chatA !== chatB) throw new Error('venue chatter should be deterministic per slot');
+  if (chatter.length < 2) throw new Error('cafe should have at least 2 chatter lines');
+  if (chatter.some((c) => !c.text || c.text.length < 8)) throw new Error('chatter lines should have text');
+  if (!chatter.some((c) => c.text.length > 20)) throw new Error('chatter should not be empty templates');
+
+  // staff venue + sapaan bot kerumunan (NPC brain buat 290 bot)
+  const staff = ambienceMod.staffLines(sim, 'cafe');
+  if (staff.length < 2) throw new Error('cafe staff should have lines');
+  const crowdBot = cafe.crowd[0];
+  const talk = socialMod.chatWith(sim, crowdBot.id);
+  if (!talk.ok) throw new Error('chat with crowd bot should work');
+  if (!talk.lines || talk.lines.length < 2) throw new Error('crowd chat should have greeting + small talk');
+  if (!talk.lines[0].includes(crowdBot.name)) throw new Error('crowd greeting should mention the bot name');
+
+  console.log(
+    `interior crowd: ${cafe.crowd.length} orang ok | chatter ${chatter.length} baris ok | staff ${staff.length} baris ok`
+  );
 }

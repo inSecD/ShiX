@@ -26,6 +26,9 @@ export interface DialogueState {
   choices: EncounterChoice[];
   src: 'chat' | 'encounter';
   encounterId?: string;
+  /** speaker sintetis (staff venue) — kalo kosong, nama diambil dari bot */
+  speakerName?: string;
+  speakerEmoji?: string;
 }
 
 export function createDialogue(): DialogueState {
@@ -42,6 +45,8 @@ export function normalizeDialogue(x: unknown): DialogueState {
   const choices = Array.isArray(d.choices) ? d.choices.filter((c) => !!c && typeof c.label === 'string') : [];
   const src = d.src === 'encounter' ? 'encounter' : 'chat';
   const encounterId = typeof d.encounterId === 'string' ? d.encounterId : undefined;
+  const speakerName = typeof d.speakerName === 'string' ? d.speakerName : undefined;
+  const speakerEmoji = typeof d.speakerEmoji === 'string' ? d.speakerEmoji : undefined;
   const lastIdx = lines.length > 0 ? Math.min(idx, lines.length - 1) : 0;
   return {
     open: !!d.open,
@@ -50,7 +55,9 @@ export function normalizeDialogue(x: unknown): DialogueState {
     idx: lastIdx,
     choices,
     src,
-    encounterId
+    encounterId,
+    speakerName,
+    speakerEmoji
   };
 }
 
@@ -59,10 +66,15 @@ export function startDialogue(
   state: SimState,
   npcId: string,
   lines: VNLine[],
-  opts?: { choices?: EncounterChoice[]; src?: 'chat' | 'encounter'; encounterId?: string }
+  opts?: {
+    choices?: EncounterChoice[];
+    src?: 'chat' | 'encounter';
+    encounterId?: string;
+    speaker?: { name: string; emoji: string };
+  }
 ): DialogueState {
   const clean = (lines ?? []).filter((l) => l && typeof l.text === 'string');
-  const picked = clean.slice(0, 4);
+  const picked = clean.slice(0, 5);
   const withChoices = (opts?.choices?.length ?? 0) > 0;
   const d: DialogueState = {
     open: true,
@@ -71,7 +83,9 @@ export function startDialogue(
     idx: withChoices ? Math.max(0, picked.length - 1) : 0,
     choices: opts?.choices ?? [],
     src: opts?.src ?? 'chat',
-    encounterId: opts?.encounterId
+    encounterId: opts?.encounterId,
+    speakerName: opts?.speaker?.name,
+    speakerEmoji: opts?.speaker?.emoji
   };
   state.dialogue = d;
   return d;

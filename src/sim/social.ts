@@ -37,6 +37,62 @@ const OPENER: Record<BotStrategy, string> = {
   panic: 'AWAS,'
 };
 
+/** sapaan buat bot kerumunan (bukan 10 NPC kenalan) — biar nggak flat */
+function crowdGreeting(state: SimState, bot: Bot): string {
+  const pnl = Math.round(bot.pnlPct);
+  const hold = bot.holdings[0]?.instId;
+  const options = [
+    `${bot.name} nyapa. "Lagi ngapain? Gue baru balik dari layar."`,
+    `${bot.name} ngangkat gelas. "Pasar ${state.macro.regime.toLowerCase()} gini bikin susah tidur."`,
+    hold
+      ? `${bot.name} nunjuk layar HP. "Lagi mantau ${hold}, masih nyangkut dikit."`
+      : `${bot.name} nyapa santai. "Cash gue utuh. Itu juga prestasi, kan?"`,
+    pnl > 15
+      ? `${bot.name} senyum tipis. "Portfolio gue ${pnl}% naik. Jangan bilang siapa-siapa."`
+      : pnl < -15
+        ? `${bot.name} nghela napas. "Gue ${Math.abs(pnl)}% di bawah. Lagi mode bertahan."`
+        : `${bot.name} nyapa. "Lagi nunggu katalis. Lo bawa rumor nggak?"`
+  ];
+  return options[(state.ticks + bot.id.length) % options.length];
+}
+
+/** obrolan kecil berbasis strategi + portfolio — bagian dari NPC brain */
+function botSmallTalk(state: SimState, bot: Bot): string {
+  const pnl = Math.round(bot.pnlPct);
+  const hold = bot.holdings[0]?.instId;
+  const moverId = state.order.find((id) => {
+    const inst = state.instruments[id];
+    return inst && inst.open > 0 && Math.abs((inst.price - inst.open) / inst.open) > 0.02;
+  });
+  const mover = moverId ? state.instruments[moverId] : null;
+
+  if (bot.strategy === 'panic' && pnl < 0) {
+    return `"Gue udah cut dua kali hari ini. Tangan gue masih gemetar."`;
+  }
+  if (hold) {
+    return `"Gue masih pegang ${hold}. ${pnl >= 0 ? 'Lumayan hijau' : 'Merah tipis'}, tapi belum mau nambah."`;
+  }
+  if (mover) {
+    const chg = ((mover.price - mover.open) / mover.open) * 100;
+    return `"${mover.name} ${chg >= 0 ? 'naik' : 'turun'} ${Math.abs(chg).toFixed(1).replace('.', ',')}%. Lo udah liat?"`;
+  }
+  switch (bot.strategy) {
+    case 'quant':
+      return `"Gue lagi backtest. Hasilnya bagus, tapi masa lalu nggak selalu bayar sewa."`;
+    case 'whale':
+      return `"Gue nggak lihat chart tiap menit. Gue lihat siapa yang panik."`;
+    case 'degen':
+      return `"Kalau ada koin baru, kabarin. Gue lagi cari alasan buat deg-degan."`;
+    case 'contrarian':
+      return `"Kalo semua orang di sini setuju, gue mulai mikir kebalikannya."`;
+    case 'momentum':
+      return `"Trend itu teman. Selama lo nggak telat masuk."`;
+    default:
+      return `"Pasar ${state.macro.regime.toLowerCase()}. Gue sih kecil-kecilan dulu."`;
+  }
+}
+
+
 /** jeda (tick) sebelum bisa ngobrol lagi sama NPC yang sama */
 export const CHAT_COOLDOWN = 6;
 
@@ -203,13 +259,13 @@ export function chatWith(state: SimState, botId: string): ChatResult {
     social.rumor = { botId, text: rumor, tier, evId: state.pendingEvent.ev.id, at: state.simTime };
   }
 
-  const greeting = INTRO[botId] ?? `${bot.name} ngobrol.`;
+  const greeting = INTRO[botId] ?? crowdGreeting(state, bot);
   const convo: ConvoState = { botId, greeting, rumor, gain, at: state.simTime };
   social.lastConvo = convo;
 
-  // NPC brain (Phase 14 v2): respons = greeting + rumor + reaksi kontekstual dari ingatan
+  // NPC brain (Phase 14 v2/v4): greeting + small talk + rumor + reaksi dari ingatan
   const ctx = npcContextLine(state, botId);
-  const lines = [greeting];
+  const lines = [greeting, botSmallTalk(state, bot)];
   if (rumor) lines.push(rumor);
   if (ctx) lines.push(ctx);
   const msg = lines.join(' · ');

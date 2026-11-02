@@ -66,6 +66,7 @@ import type { EncounterChoice } from './sim/encounter';
 import type { VNLine } from './sim/dialogue';
 import { LOCATION_BY_ID, isLocationUnlocked, locationHint, normalizeHub } from './sim/hub';
 import { chatWith, normalizeSocial, npcAtLocation, rememberNpcEvent } from './sim/social';
+import { staffLines, venueInfo } from './sim/ambience';
 import { clearState, loadState, saveState } from './lib/persist';
 import type {
   AssetClass,
@@ -405,12 +406,13 @@ interface Store {
   takeMortgage: (assetId: string) => void;
   payOffLoan: () => void;
 
-  dialogueOpen: (npcId: string, lines: VNLine[], opts?: { choices?: EncounterChoice[]; src?: 'chat' | 'encounter'; encounterId?: string }) => void;
+  dialogueOpen: (npcId: string, lines: VNLine[], opts?: { choices?: EncounterChoice[]; src?: 'chat' | 'encounter'; encounterId?: string; speaker?: { name: string; emoji: string } }) => void;
   dialogueAdvance: () => void;
   dialogueChoose: (idx: number) => void;
   dialogueClose: () => void;
 
   npcChat: (botId: string) => void;
+  staffTalk: (locId: string) => void;
 
   reset: (seed?: number, cash?: number) => void;
   save: () => Promise<void>;
@@ -1092,6 +1094,24 @@ export const useStore = create<Store>((set, get) => ({
         startDialogue(sim, botId, linesForChat(sim, botId, res), { src: 'chat' });
       }
     }
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  staffTalk: (locId) => {
+    const { sim } = get();
+    const info = venueInfo(locId);
+    if (!info) return;
+    const texts = staffLines(sim, locId);
+    if (texts.length === 0) return;
+    const lines: VNLine[] = texts.map((text, i) => ({
+      npcId: info.staff.id,
+      text,
+      tone: i === 0 ? 'plain' : 'think'
+    }));
+    startDialogue(sim, info.staff.id, lines, {
+      src: 'chat',
+      speaker: { name: info.staff.name, emoji: info.staff.emoji }
+    });
     set((s) => ({ v: s.v + 1 }));
   },
 

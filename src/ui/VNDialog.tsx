@@ -39,8 +39,8 @@ export function VNDialog() {
   if (!d.open || !line) return null;
 
   const npc = sim.bots.find((b) => b.id === d.npcId);
-  const speaker = npc?.emoji ?? '🗨️';
-  const name = npc?.name ?? 'Orang';
+  const speaker = d.speakerEmoji ?? npc?.emoji ?? '🗨️';
+  const name = d.speakerName ?? npc?.name ?? 'Orang';
   const text = line.text;
   const tone = line.tone;
 
