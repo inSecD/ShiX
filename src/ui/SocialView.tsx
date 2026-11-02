@@ -3,6 +3,7 @@ import { useStore } from '../store';
 import { parseMention } from '../sim/mentions';
 import { postCooldownLeft } from '../sim/profile';
 import { hashString } from '../sim/rng';
+import { MEDIA_OUTLETS, mediaReach } from '../sim/media';
 import type { FeedPost, PostMedia } from '../sim/types';
 
 type FeedTab = 'fyp' | 'following' | 'explore';
@@ -323,9 +324,14 @@ export function SocialView() {
   const v = useStore((s) => s.v);
   void v;
   const toggleFollow = useStore((s) => s.toggleFollow);
+  const mediaBuy = useStore((s) => s.mediaBuy);
+  const mediaUpgrade = useStore((s) => s.mediaUpgrade);
+  const mediaPublish = useStore((s) => s.mediaPublish);
 
   const [tab, setTab] = useState<FeedTab>('fyp');
   const [query, setQuery] = useState('');
+  const [mediaDraft, setMediaDraft] = useState('');
+  const [mediaAsset, setMediaAsset] = useState<string>('');
 
   const posts = sim.feed.posts;
   const followingSet = useMemo(() => new Set(sim.profile.following), [sim.profile.following]);
@@ -436,6 +442,77 @@ export function SocialView() {
       )}
 
       {tab !== 'explore' && <Composer />}
+
+      <div className="sx-media">
+        <div className="sx-sec">📰 Media Empire</div>
+        <div className="sx-media-head">
+          <span>Influence: {Math.round(sim.media.influence)}/100</span>
+          <span>Reach: {mediaReach(sim)}</span>
+          <span>Artikel: {sim.media.articles}</span>
+        </div>
+        <div className="sx-media-grid">
+          {MEDIA_OUTLETS.map((o) => {
+            const owned = sim.media.owned.find((x) => x.id === o.id);
+            return (
+              <div className="sx-media-card" key={o.id}>
+                <div className="sx-media-ico">{o.icon}</div>
+                <div className="sx-media-info">
+                  <b>{o.name}</b>
+                  <span className="tiny muted">
+                    Tier {o.tier} · reach {o.reach} · upkeep ${o.upkeep}/hari
+                  </span>
+                </div>
+                {owned ? (
+                  <button className="short" onClick={() => mediaUpgrade(o.id)}>
+                    Lv.{owned.level} · Upgrade
+                  </button>
+                ) : (
+                  <button
+                    className="short"
+                    disabled={sim.cash < o.price}
+                    onClick={() => mediaBuy(o.id)}
+                  >
+                    Beli ${o.price.toLocaleString('en-US')}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        {sim.media.owned.length > 0 && (
+          <div className="sx-media-publish">
+            <select
+              className="ct-input"
+              value={mediaAsset}
+              onChange={(e) => setMediaAsset(e.target.value)}
+            >
+              <option value="">— tanpa aset —</option>
+              {sim.order.slice(0, 12).map((id) => (
+                <option key={id} value={id}>
+                  {sim.instruments[id]?.name ?? id}
+                </option>
+              ))}
+            </select>
+            <textarea
+              className="ct-input"
+              rows={2}
+              placeholder="Tulis artikel / opini media (maks 240)…"
+              value={mediaDraft}
+              onChange={(e) => setMediaDraft(e.target.value)}
+            />
+            <button
+              className="primary"
+              onClick={() => {
+                mediaPublish(mediaDraft, mediaAsset || null);
+                setMediaDraft('');
+              }}
+              disabled={!mediaDraft.trim()}
+            >
+              📰 Publish
+            </button>
+          </div>
+        )}
+      </div>
 
       <div className="sx-feed">
         {shown.map((p) => (

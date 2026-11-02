@@ -256,6 +256,19 @@ export interface ProfileState {
   posts: number;
 }
 
+export interface MediaOutletInstance {
+  id: string;
+  boughtAt: number;
+  level: number;
+}
+
+export interface MediaState {
+  owned: MediaOutletInstance[];
+  /** 0..100 — makin tinggi makin besar jangkauan & pengaruh narasi */
+  influence: number;
+  lastPublishTick: number;
+  articles: number;
+}
 export interface LaunchToken {
   id: string;
   name: string;
@@ -405,6 +418,7 @@ export interface SimState {
   lifestyle: LifestyleState;
   hub: HubState;
   business: BusinessState;
+  media: MediaState;
   life: LifeState;
   encounter: EncounterState;
   quests: QuestState;

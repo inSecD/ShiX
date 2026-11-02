@@ -25,6 +25,7 @@ import { createDialogue } from './dialogue';
 import { createFeed, feedTick } from './feed';
 import { tradeFeeMult } from './life';
 import { createProfile, profileTick } from './profile';
+import { createMedia, mediaTick } from './media';
 import type { AssetClass, Candle, Fill, Instrument, Position, Settings, SimState } from './types';
 
 export const HOUR = 3_600_000;
@@ -205,6 +206,7 @@ export function createSim(settings: Settings): SimState {
     social: createSocial(),
     feed: createFeed(),
     profile: createProfile(),
+  media: createMedia(),
     chaos: 0.3,
     story: createStory(),
     meta: createMeta(),
@@ -256,6 +258,7 @@ export function tick(state: SimState, settings: Settings, warmup = false): void 
   lifeTick(state, warmup);
   feedTick(state, rng);
   profileTick(state);
+mediaTick(state);
   if (!warmup) {
     for (const ev of worldNews.slice(0, 2)) {
       state.events.unshift({

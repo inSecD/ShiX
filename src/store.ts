@@ -36,6 +36,7 @@ import {
   toggleShift
 } from './sim/life';
 import { normalizeProfile, publishPost, toggleFollow } from './sim/profile';
+import { normalizeMedia, buyMedia, upgradeMedia, publishArticle } from './sim/media';
 import { normalizeEncounter, maybeEncounter, resolveEncounter } from './sim/encounter';
 import {
   acceptQuest,
@@ -212,6 +213,7 @@ function normalizeSim(sim: SimState, startingCash: number): SimState {
   sim.social = normalizeSocial(sim.social);
   sim.feed = normalizeFeed(sim.feed);
   sim.profile = normalizeProfile(sim.profile);
+  sim.media = normalizeMedia(sim.media);
   // post lama (sebelum Phase 7) → handle author di-backfill dari bot-nya
   {
     const botHandle = new Map(sim.bots.map((b) => [b.id, b.handle]));
@@ -387,6 +389,9 @@ interface Store {
   toggleFollow: (botId: string) => void;
   likePost: (postId: string) => void;
   repostPost: (postId: string) => void;
+  mediaBuy: (outletId: string) => void;
+  mediaUpgrade: (outletId: string) => void;
+  mediaPublish: (text: string, assetId?: string | null) => void;
 
   hubGoto: (locId: string) => void;
 
@@ -885,6 +890,27 @@ export const useStore = create<Store>((set, get) => ({
     const res = toggleFollow(sim, botId);
     notify(res.msg, res.ok ? 'ok' : 'err');
     if (res.ok) bumpQuest(sim, 'follow', botId);
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  mediaBuy: (outletId) => {
+    const { sim, notify } = get();
+    const res = buyMedia(sim, outletId);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  mediaUpgrade: (outletId) => {
+    const { sim, notify } = get();
+    const res = upgradeMedia(sim, outletId);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  mediaPublish: (text, assetId) => {
+    const { sim, notify } = get();
+    const res = publishArticle(sim, text, assetId);
+    notify(res.msg, res.ok ? 'ok' : 'err');
     set((s) => ({ v: s.v + 1 }));
   },
 

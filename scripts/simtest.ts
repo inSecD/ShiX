@@ -34,6 +34,7 @@ import * as minigameMod from '../src/sim/minigame';
 import * as metaMod from '../src/sim/meta';
 import * as dialogueMod from '../src/sim/dialogue';
 import * as conversationMod from '../src/sim/conversation';
+import * as mediaMod from '../src/sim/media';
 import * as ambienceMod from '../src/sim/ambience';
 import * as feedMod from '../src/sim/feed';
 import * as perksMod from '../src/sim/perks';
@@ -1559,4 +1560,72 @@ function openLong(sim: SimState) {
   if (!Array.isArray(chatRes.lines) || chatRes.lines.length < 1) throw new Error('chatWith should return lines');
 
   console.log('npc convo v2: detect + multi-turn + personality + suggestions + normalize ok');
+}
+
+// ---------- V3.5 pilar 1: Media & Influence ----------
+{
+  const sim = freshSim();
+  const media = mediaMod;
+
+  // ---- beli outlet ----
+  const buy = media.buyMedia(sim, 'blog');
+  if (!buy.ok) throw new Error('buyMedia blog should succeed: ' + buy.msg);
+  if (sim.media.owned.length !== 1) throw new Error('owned should have 1 outlet');
+  if (sim.media.owned[0].id !== 'blog') throw new Error('owned outlet id mismatch');
+  if (sim.media.influence <= 0) throw new Error('influence should increase after buy');
+
+  // ---- beli outlet yang sama → gagal ----
+  const buy2 = media.buyMedia(sim, 'blog');
+  if (buy2.ok) throw new Error('buyMedia duplicate should fail');
+
+  // ---- beli tanpa cash cukup → gagal ----
+  const poor = freshSim();
+  poor.cash = 100;
+  const buyPoor = media.buyMedia(poor, 'tv');
+  if (buyPoor.ok) throw new Error('buyMedia should fail without enough cash');
+
+  // ---- publish artikel butuh outlet ----
+  const noOutlet = freshSim();
+  const pub0 = media.publishArticle(noOutlet, 'Halo dunia');
+  if (pub0.ok) throw new Error('publishArticle should fail without outlet');
+
+  // ---- publish artikel dengan outlet → follower & fame naik ----
+  const beforeFollowers = sim.profile.followers;
+  const beforeFame = sim.profile.fame;
+  const art = media.publishArticle(sim, 'Pasar lagi rame, hati-hati FOMO', sim.order[0]);
+  if (!art.ok) throw new Error('publishArticle should succeed: ' + art.msg);
+  if (sim.media.articles !== 1) throw new Error('articles should increment');
+  if (sim.profile.followers <= beforeFollowers) throw new Error('followers should increase after publish');
+  if (sim.profile.fame < beforeFame) throw new Error('fame should not decrease');
+  if (sim.media.lastPublishTick !== sim.ticks) throw new Error('lastPublishTick should update');
+
+  // ---- cooldown publish ----
+  const pub2 = media.publishArticle(sim, 'Artikel kedua');
+  if (pub2.ok) throw new Error('publishArticle should respect cooldown');
+
+  // ---- upgrade outlet ----
+  const up = media.upgradeMedia(sim, 'blog');
+  if (!up.ok) throw new Error('upgradeMedia should succeed: ' + up.msg);
+  if (sim.media.owned[0].level !== 2) throw new Error('level should be 2');
+
+  // ---- mediaReach & mediaInfluence ----
+  if (media.mediaReach(sim) <= 0) throw new Error('mediaReach should be > 0');
+  if (media.mediaInfluence(sim) <= 0) throw new Error('mediaInfluence should be > 0');
+
+  // ---- normalizeMedia ----
+  const norm = media.normalizeMedia({ owned: [{ id: 'blog', boughtAt: 1, level: 3 }], influence: 50, lastPublishTick: 5, articles: 2 });
+  if (!norm.owned[0] || norm.owned[0].level !== 3) throw new Error('normalizeMedia should keep level');
+  if (norm.influence !== 50) throw new Error('normalizeMedia should keep influence');
+  if (norm.articles !== 2) throw new Error('normalizeMedia should keep articles');
+
+  // ---- mediaTick: pengaruh tumbuh, upkeep dipotong ----
+  const sim2 = freshSim();
+  media.buyMedia(sim2, 'blog');
+  const cashBefore = sim2.cash;
+  const infBefore = sim2.media.influence;
+  media.mediaTick(sim2);
+  if (sim2.media.influence < infBefore) throw new Error('mediaTick should grow influence');
+  if (sim2.cash >= cashBefore) throw new Error('mediaTick should deduct upkeep');
+
+  console.log('media & influence: buy/publish/upgrade/reach/tick/normalize ok');
 }
