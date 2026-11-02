@@ -158,6 +158,26 @@ export interface ConvoState {
   at: number;
 }
 
+/** satu giliran percakapan NPC (Phase 14 v5) */
+export interface ChatTurn {
+  role: 'npc' | 'player';
+  text: string;
+  t: number;
+  tone?: 'plain' | 'joy' | 'sad' | 'think';
+  /** topik yang dibahas (buat ingatan & koherensi multi-turn) */
+  topic?: string | null;
+}
+
+/** benang percakapan dengan satu NPC — disimpan biar NPC inget obrolan sebelumnya */
+export interface ChatThread {
+  botId: string;
+  turns: ChatTurn[];
+  lastTopic: string | null;
+  lastAt: number;
+  /** berapa kali dapat poin pertemanan di sesi ini (anti-farming) */
+  gains: number;
+}
+
 export interface SocialState {
   friendship: Record<string, number>;
   lastChat: Record<string, number>;
@@ -166,6 +186,8 @@ export interface SocialState {
   lastConvo: ConvoState | null;
   /** ingatan NPC tentang pemain (trade, encounter, rumor, quest) — buat bicara berbasis konteks */
   npcMemory: Record<string, NpcMemoryEntry[]>;
+  /** percakapan multi-turn per NPC (chat engine v2) */
+  threads: Record<string, ChatThread>;
 }
 
 /** satu catatan ingatan NPC tentang kejadian yang menyentuh pemain */

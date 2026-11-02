@@ -1,4 +1,14 @@
-import type { Bot, BotStrategy, ConvoState, NpcMemoryEntry, PendingEvent, SimState, SocialState } from './types';
+import type {
+  Bot,
+  BotStrategy,
+  ChatThread,
+  ChatTurn,
+  ConvoState,
+  NpcMemoryEntry,
+  PendingEvent,
+  SimState,
+  SocialState
+} from './types';
 import { perksOf } from './perks';
 
 /** lokasi tiap NPC nongol — nyambung ke unlock aset (Fase 1-2), jadi makin kaya makin banyak yang bisa ditemui */
@@ -96,8 +106,48 @@ function botSmallTalk(state: SimState, bot: Bot): string {
 /** jeda (tick) sebelum bisa ngobrol lagi sama NPC yang sama */
 export const CHAT_COOLDOWN = 6;
 
+/** batas giliran per benang biar save nggak bengkak */
+export const CHAT_TURN_CAP = 24;
+
 export function createSocial(): SocialState {
-  return { friendship: {}, lastChat: {}, met: [], rumor: null, lastConvo: null, npcMemory: {} };
+  return {
+    friendship: {},
+    lastChat: {},
+    met: [],
+    rumor: null,
+    lastConvo: null,
+    npcMemory: {},
+    threads: {}
+  };
+}
+
+function normalizeThread(botId: string, raw: unknown): ChatThread | null {
+  const t = raw as Partial<ChatThread> | null | undefined;
+  if (!t || typeof t !== 'object' || !Array.isArray(t.turns)) return null;
+  const turns: ChatTurn[] = [];
+  for (const item of t.turns) {
+    if (!item || typeof item !== 'object') continue;
+    const role = item.role === 'player' ? 'player' : item.role === 'npc' ? 'npc' : null;
+    const text = typeof item.text === 'string' ? item.text.replace(/\s+/g, ' ').trim().slice(0, 220) : '';
+    if (!role || !text) continue;
+    const tone =
+      item.tone === 'joy' || item.tone === 'sad' || item.tone === 'think' ? item.tone : item.tone === 'plain' ? 'plain' : undefined;
+    turns.push({
+      role,
+      text,
+      t: Number(item.t) || 0,
+      tone,
+      topic: typeof item.topic === 'string' ? item.topic : null
+    });
+  }
+  if (turns.length === 0) return null;
+  return {
+    botId,
+    turns: turns.slice(-CHAT_TURN_CAP),
+    lastTopic: typeof t.lastTopic === 'string' ? t.lastTopic : null,
+    lastAt: Number(t.lastAt) || turns[turns.length - 1]?.t || 0,
+    gains: Math.max(0, Math.min(99, Math.floor(Number(t.gains) || 0)))
+  };
 }
 
 export function normalizeSocial(s: unknown): SocialState {
@@ -131,7 +181,21 @@ export function normalizeSocial(s: unknown): SocialState {
       if (clean.length) npcMemory[k] = clean;
     }
   }
-  return { friendship, lastChat, met, rumor, lastConvo, npcMemory };
+  const threads: Record<string, ChatThread> = {};
+  if (x.threads && typeof x.threads === 'object') {
+    for (const [k, v] of Object.entries(x.threads)) {
+      const thread = normalizeThread(k, v);
+      if (thread) threads[k] = thread;
+    }
+    const keys = Object.keys(threads);
+    if (keys.length > 60) {
+      keys
+        .sort((a, b) => threads[b].lastAt - threads[a].lastAt)
+        .slice(60)
+        .forEach((k) => delete threads[k]);
+    }
+  }
+  return { friendship, lastChat, met, rumor, lastConvo, npcMemory, threads };
 }
 
 /** catat ingatan NPC tentang kejadian pemain */
@@ -171,7 +235,7 @@ export function npcContextLine(state: SimState, botId: string): string | null {
   if (mem.ev === 'encounter') return `${who} masih mikir kejadian tadi: "${mem.text}"`;
   if (mem.ev === 'rumor') return `${who} ikut bercerita soal rumor terakhir: "${mem.text}"`;
   if (mem.ev === 'quest') return `${who} cerita misi yang belum selesai: "${mem.text}"`;
-  if (mem.ev === 'chat') return `${who} masih mikir obrolan mereka kemarin.`;
+  if (mem.ev === 'chat') return `${who} masih inget obrolan kalian: "${mem.text.slice(0, 90)}"`;
   return null;
 }
 
@@ -206,7 +270,7 @@ export function chatCooldownLeft(state: SimState, botId: string): number {
   return Math.max(0, gap - (state.ticks - last));
 }
 
-function rumorText(state: SimState, bot: Bot, pending: PendingEvent, tier: number): string {
+export function rumorText(state: SimState, bot: Bot, pending: PendingEvent, tier: number): string {
   const inst = pending.instId ? state.instruments[pending.instId] : null;
   const up = pending.impact >= 0;
   const gerak = up ? 'melonjak' : 'tertekan';

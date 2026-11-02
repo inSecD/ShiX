@@ -56,7 +56,6 @@ import { normalizeMeta, payOffLoan, takeMortgage } from './sim/meta';
 import {
   advanceDialogue,
   closeDialogue,
-  linesForChat,
   linesForEncounter,
   normalizeDialogue,
   pickChoice,
@@ -66,6 +65,7 @@ import type { EncounterChoice } from './sim/encounter';
 import type { VNLine } from './sim/dialogue';
 import { LOCATION_BY_ID, isLocationUnlocked, locationHint, normalizeHub } from './sim/hub';
 import { chatWith, normalizeSocial, npcAtLocation, rememberNpcEvent } from './sim/social';
+import { appendPlayerTurn, openChatThread, replyToPlayer } from './sim/conversation';
 import { staffLines, venueInfo } from './sim/ambience';
 import { clearState, loadState, saveState } from './lib/persist';
 import type {
@@ -321,6 +321,9 @@ interface Store {
   worldCountry: string;
   booted: boolean;
   saving: boolean;
+  /** NPC yang lagi diajak chat (overlay) + indikator "lagi mikir" */
+  chatBotId: string | null;
+  chatTyping: boolean;
 
   boot: () => Promise<void>;
   setTab: (t: Tab) => void;
@@ -413,6 +416,8 @@ interface Store {
 
   npcChat: (botId: string) => void;
   staffTalk: (locId: string) => void;
+  chatSend: (text: string, topicId?: string) => void;
+  chatClose: () => void;
 
   reset: (seed?: number, cash?: number) => void;
   save: () => Promise<void>;
@@ -439,6 +444,8 @@ export const useStore = create<Store>((set, get) => ({
   tutActive: false,
   tutStep: 0,
   tutDone: false,
+  chatBotId: null,
+  chatTyping: false,
 
   boot: async () => {
     const hash = (window.location.hash || '').replace('#/', '') as Tab;
@@ -567,7 +574,7 @@ export const useStore = create<Store>((set, get) => ({
       const instName = sim.instruments[p.instId]?.name ?? p.instId;
       for (const b of sim.bots) {
         const hold = b.holdings.find((h) => h.instId === p.instId);
-        if (hold) rememberNpcEvent(sim, b.id, 'trade', `${instName} → lo`);
+        if (hold) rememberNpcEvent(sim, b.id, 'trade', `Lo ${p.side === 'buy' ? 'beli' : 'jual'} ${instName}`);
       }
       sim.progress.bought = true;
     }
@@ -603,7 +610,7 @@ export const useStore = create<Store>((set, get) => ({
       const instName = sim.instruments[instId]?.name ?? instId;
       for (const b of sim.bots) {
         const hold = b.holdings.find((h) => h.instId === instId);
-        if (hold) rememberNpcEvent(sim, b.id, 'trade', `${instName} → lo`);
+        if (hold) rememberNpcEvent(sim, b.id, 'trade', `Lo beli ${instName}`);
       }
       sim.progress.bought = true;
     }
@@ -619,7 +626,7 @@ export const useStore = create<Store>((set, get) => ({
       const instName = sim.instruments[instId]?.name ?? instId;
       for (const b of sim.bots) {
         const hold = b.holdings.find((h) => h.instId === instId);
-        if (hold) rememberNpcEvent(sim, b.id, 'trade', `${instName} → lo`);
+        if (hold) rememberNpcEvent(sim, b.id, 'trade', `Lo jual ${instName}`);
       }
     }
     notify(res.msg, res.ok ? 'ok' : 'err');
@@ -1071,31 +1078,59 @@ export const useStore = create<Store>((set, get) => ({
   npcChat: (botId) => {
     const { sim, notify } = get();
     const res = chatWith(sim, botId);
-    notify(res.msg, res.ok ? 'ok' : 'err');
-    if (res.ok) {
-      // quest: progres "ngobrol"
-      bumpQuest(sim, 'chat', botId);
-      // encounter acak pas ngobrol → otomatis buka VN dialog-nya
-      const encRng = new RNG((sim.rngState ^ Date.now()) >>> 0);
-      const enc = maybeEncounter(sim, encRng, 'chat');
-      if (enc) {
-        notify(`${enc.icon} ${enc.title}`, 'ok');
-        startDialogue(sim, botId, linesForEncounter(enc, botId), {
-          choices: enc.choices,
-          src: 'encounter',
-          encounterId: enc.id
-        });
-      }
-      // misi baru dari NPC (kalo friendship cukup)
-      const q = questOfNpc(sim, botId);
-      if (q) notify(`📋 ${sim.bots.find((b) => b.id === botId)?.name ?? ''} punya misi: ${q.title}`, 'ok');
-      // kalau nggak ada encounter, buka VN dialog dari percakapan biasa
-      if (!enc) {
-        startDialogue(sim, botId, linesForChat(sim, botId, res), { src: 'chat' });
-      }
+    if (!res.ok) {
+      notify(res.msg, 'err');
+      set((s) => ({ v: s.v + 1 }));
+      return;
     }
-    set((s) => ({ v: s.v + 1 }));
+    // quest: progres "ngobrol"
+    bumpQuest(sim, 'chat', botId);
+    // buka benang percakapan multi-turn (sapaan + small talk + rumor + ingatan)
+    openChatThread(sim, botId, res.lines ?? [res.msg]);
+    const bot = sim.bots.find((b) => b.id === botId);
+    const q = questOfNpc(sim, botId);
+    if (q) notify(`📋 ${bot?.name ?? 'NPC'} punya misi: ${q.title}`, 'ok');
+    set((s) => ({ chatBotId: botId, chatTyping: false, v: s.v + 1 }));
   },
+
+  chatSend: (text, topicId) => {
+    const { sim } = get();
+    const botId = get().chatBotId;
+    if (!botId || get().chatTyping) return;
+    const clean = text.replace(/\s+/g, ' ').trim().slice(0, 180);
+    if (!clean) return;
+
+    const thread = sim.social.threads?.[botId];
+    const firstTurn = (thread?.turns.filter((t) => t.role === 'player').length ?? 0) === 0;
+    appendPlayerTurn(sim, botId, clean, topicId);
+    set((s) => ({ chatTyping: true, v: s.v + 1 }));
+
+    // jeda kecil biar kerasa kayak NPC mikir dulu
+    const delay = 420 + Math.min(520, clean.length * 7);
+    window.setTimeout(() => {
+      if (get().chatBotId !== botId) return;
+      const { notify } = get();
+      replyToPlayer(sim, botId, clean, topicId);
+      set((s) => ({ chatTyping: false, v: s.v + 1 }));
+
+      // encounter cuma dicek sekali di pesan pertama, biar nggak ganggu tiap balasan
+      if (firstTurn) {
+        const encRng = new RNG((sim.rngState ^ Date.now()) >>> 0);
+        const enc = maybeEncounter(sim, encRng, 'chat');
+        if (enc) {
+          notify(`${enc.icon} ${enc.title}`, 'ok');
+          startDialogue(sim, botId, linesForEncounter(enc, botId), {
+            choices: enc.choices,
+            src: 'encounter',
+            encounterId: enc.id
+          });
+          set((s) => ({ v: s.v + 1 }));
+        }
+      }
+    }, delay);
+  },
+
+  chatClose: () => set({ chatBotId: null, chatTyping: false }),
 
   staffTalk: (locId) => {
     const { sim } = get();

@@ -1,6 +1,4 @@
 import type { SimState } from './types';
-import type { Bot } from './types';
-import type { ChatResult } from './social';
 import type { EncounterChoice, EncounterDef } from './encounter';
 
 /**
@@ -135,17 +133,6 @@ export function pickChoice(state: SimState, idx: number): EncounterChoice | null
   if (!d.open) return null;
   const ch = d.choices[idx];
   return ch ?? null;
-}
-
-/** deretan VN baris dari percakapan chat (greeting + rumor + konteks NPC) */
-export function linesForChat(state: SimState, botId: string, res: ChatResult): VNLine[] {
-  const bot = state.bots.find((b: Bot) => b.id === botId);
-  const who = bot?.name ?? botId;
-  const lines: VNLine[] = [];
-  const texts = res.ok ? res.lines ?? [res.msg] : [res.msg];
-  texts.forEach((text, i) => lines.push({ npcId: botId, text, tone: i === 0 ? ('plain' as const) : ('think' as const) }));
-  if (lines.length === 0) lines.push({ npcId: botId, text: `${who} bilang nada.`, tone: 'plain' });
-  return lines;
 }
 
 /** deretan VN baris dari scene encounter — split per kalimat, 4 baris terakhir jadi tone joy */

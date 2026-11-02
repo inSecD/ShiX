@@ -7,6 +7,7 @@ import { postCooldownLeft } from '../sim/profile';
 import { LifePanel } from './LifePanel';
 import { QuestPanel, RelationshipPanel, MinigamePanel, MetaPanel } from './HubExtras';
 import { VNDialog } from './VNDialog';
+import { NpcChat } from './NpcChat';
 import {
   LOCATIONS,
   LOCATION_BY_ID,
@@ -1095,6 +1096,7 @@ export function WorldHubView() {
       </div>
 
       <VNDialog />
+      <NpcChat />
 
       <div className="panel">
         <div className="panel-head">

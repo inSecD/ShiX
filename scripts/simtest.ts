@@ -33,6 +33,7 @@ import * as storyMod from '../src/sim/story';
 import * as minigameMod from '../src/sim/minigame';
 import * as metaMod from '../src/sim/meta';
 import * as dialogueMod from '../src/sim/dialogue';
+import * as conversationMod from '../src/sim/conversation';
 import * as ambienceMod from '../src/sim/ambience';
 import * as feedMod from '../src/sim/feed';
 import * as perksMod from '../src/sim/perks';
@@ -1385,7 +1386,7 @@ function openLong(sim: SimState) {
 
   // ---- chat: greeting + rumor → lines ----
   const chatRes = socialMod.chatWith(sim, 'bot_0');
-  const chatLines = D.linesForChat(sim, 'bot_0', chatRes);
+  const chatLines = (chatRes.lines ?? [chatRes.msg]).map((text, i) => ({ npcId: 'bot_0', text, tone: i === 0 ? 'plain' : 'think' }));
   if (chatLines.length < 1) throw new Error('chat lines should have greeting');
 
   console.log('vn dialog: open/advance/close ok | encounter lines ok | chat lines ok');
@@ -1409,8 +1410,8 @@ function openLong(sim: SimState) {
   const chatRes = socialMod.chatWith(sim, 'bot_0');
   if (!chatRes.ok) throw new Error('chat should succeed');
   if (!Array.isArray(chatRes.lines) || chatRes.lines.length < 1) throw new Error('chat should return lines');
-  const dl = dialogueMod.linesForChat(sim, 'bot_0', chatRes);
-  if (dl.length !== chatRes.lines!.length) throw new Error('linesForChat should map chat lines');
+  const dl = (chatRes.lines ?? [chatRes.msg]).map((text, i) => ({ npcId: 'bot_0', text, tone: i === 0 ? 'plain' : 'think' }));
+  if (dl.length !== chatRes.lines!.length) throw new Error('chat lines should map');
 
   // ---- normalize: memory lama tanpa npcMemory tetap jalan ----
   const normS = socialMod.normalizeSocial({ friendship: {}, lastChat: {}, met: [], rumor: null, lastConvo: null });
@@ -1466,4 +1467,80 @@ function openLong(sim: SimState) {
   console.log(
     `interior crowd: ${cafe.crowd.length} orang ok | chatter ${chatter.length} baris ok | staff ${staff.length} baris ok`
   );
+}
+
+// ---------- Phase 14 v5: NPC conversation engine v2 ----------
+{
+  const sim = freshSim();
+  const conv = conversationMod;
+
+  if (conv.detectTopic(sim, 'gimana pasar hari ini?') !== 'market') throw new Error('detectTopic should map market');
+  if (conv.detectTopic(sim, 'portfolio lo gimana?') !== 'portfolio') throw new Error('detectTopic should map portfolio');
+  if (conv.detectTopic(sim, 'ada rumor apa?') !== 'rumor') throw new Error('detectTopic should map rumor');
+  if (conv.detectTopic(sim, 'menurut lo gue harus gimana?') !== 'advice') throw new Error('detectTopic should map advice');
+  if (conv.detectTopic(sim, 'cerita dong soal lo') !== 'self') throw new Error('detectTopic should map self');
+  if (conv.detectTopic(sim, 'lagi capek banget') !== 'life') throw new Error('detectTopic should map life');
+  if (conv.detectTopic(sim, 'liat posisi gue dong') !== 'player') throw new Error('detectTopic should map player');
+  if (conv.detectTopic(sim, 'prediksi besok gimana?') !== 'future') throw new Error('detectTopic should map future');
+  if (conv.detectTopic(sim, 'lelucon dong') !== 'joke') throw new Error('detectTopic should map joke');
+  if (conv.detectTopic(sim, 'halo apa kabar') !== 'greeting') throw new Error('detectTopic should map greeting');
+  if (conv.detectTopic(sim, 'makasih ya') !== 'thanks') throw new Error('detectTopic should map thanks');
+  if (conv.detectTopic(sim, 'gue pamit dulu') !== 'bye') throw new Error('detectTopic should map bye');
+
+  const open = conv.openChatThread(sim, 'bot_2', ['Halo dari DegenBoy.', 'Pasar lagi rame.']);
+  if (!open || open.turns.length !== 2) throw new Error('openChatThread should store 2 NPC turns');
+  if (open.turns[0].role !== 'npc') throw new Error('openChatThread first turn should be npc');
+
+  const p1 = conv.appendPlayerTurn(sim, 'bot_2', 'gimana pasar hari ini?');
+  if (p1.topic !== 'market') throw new Error('appendPlayerTurn should detect market');
+  const r1 = conv.replyToPlayer(sim, 'bot_2', 'gimana pasar hari ini?');
+  if (!Array.isArray(r1.lines) || r1.lines.length === 0) throw new Error('replyToPlayer should return lines');
+  if (r1.lines.some((l) => l.length < 12)) throw new Error('reply lines should have real content');
+  const thread = conv.threadOf(sim, 'bot_2')!;
+  if (thread.turns.length < 3) throw new Error('thread should have player + npc turns');
+  if (thread.lastTopic !== 'market') throw new Error('lastTopic should be market');
+
+  const p2 = conv.appendPlayerTurn(sim, 'bot_2', 'portfolio lo gimana?');
+  if (p2.topic !== 'portfolio') throw new Error('appendPlayerTurn should detect portfolio');
+  const r2 = conv.replyToPlayer(sim, 'bot_2', 'portfolio lo gimana?');
+  if (r2.topic !== 'portfolio') throw new Error('reply topic should be portfolio');
+  if (conv.threadOf(sim, 'bot_2')!.lastTopic !== 'portfolio') throw new Error('lastTopic should update to portfolio');
+
+  const sim2 = freshSim();
+  conv.openChatThread(sim2, 'bot_2', ['Halo.']);
+  const rDegen = conv.replyToPlayer(sim2, 'bot_2', 'gimana pasar hari ini?');
+  const sim3 = freshSim();
+  conv.openChatThread(sim3, 'bot_3', ['Halo.']);
+  const rQuant = conv.replyToPlayer(sim3, 'bot_3', 'gimana pasar hari ini?');
+  if (rDegen.lines.join(' ') === rQuant.lines.join(' ')) throw new Error('degen and quant replies should differ');
+
+  const instName = sim.order.length > 0 ? sim.instruments[sim.order[0]].name : '';
+  if (instName) {
+    const rInst = conv.replyToPlayer(sim, 'bot_2', `menurut lo ${instName} gimana?`);
+    if (rInst.topic !== 'instrument') throw new Error('should detect instrument topic');
+    if (!rInst.lines.some((l) => l.includes(instName) || l.includes('aset'))) throw new Error('instrument reply should mention the asset');
+  }
+
+  if (conv.threadOf(sim, 'bot_2')!.turns.length < 5) throw new Error('thread should accumulate turns');
+
+  const sugg = conv.chatSuggestions(sim, 'bot_2');
+  if (!Array.isArray(sugg) || sugg.length === 0) throw new Error('chatSuggestions should return items');
+  const ids = sugg.map((s) => s.id);
+  if (!ids.includes('market') || !ids.includes('portfolio')) throw new Error('suggestions should include market + portfolio');
+  if (sugg.some((s) => !s.label || !s.text)) throw new Error('suggestions should have label + text');
+
+  const manyTurns = Array.from({ length: 30 }, (_, i) => ({ role: i % 2 ? 'player' : 'npc', text: `turn ${i}`, t: i }));
+  const norm = socialMod.normalizeSocial({ friendship: {}, lastChat: {}, met: [], rumor: null, lastConvo: null, npcMemory: {}, threads: { bot_2: { botId: 'bot_2', turns: manyTurns, lastTopic: 'market', lastAt: 10, gains: 99 } } });
+  if (!norm.threads['bot_2']) throw new Error('normalizeSocial should keep thread');
+  if (norm.threads['bot_2'].turns.length !== 24) throw new Error('normalizeSocial should cap turns to 24');
+  if (norm.threads['bot_2'].gains !== 99) throw new Error('normalizeSocial should preserve gains');
+
+  const mem = socialMod.lastNpcMemory(sim, 'bot_2');
+  if (!mem || mem.ev !== 'chat') throw new Error('chat should record npcMemory (chat)');
+
+  const chatRes = socialMod.chatWith(sim, 'bot_9');
+  if (!chatRes.ok) throw new Error('chatWith should still work');
+  if (!Array.isArray(chatRes.lines) || chatRes.lines.length < 1) throw new Error('chatWith should return lines');
+
+  console.log('npc convo v2: detect + multi-turn + personality + suggestions + normalize ok');
 }
