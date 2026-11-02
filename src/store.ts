@@ -39,7 +39,7 @@ import {
   toggleShift
 } from './sim/life';
 import { normalizeProfile, publishPost, toggleFollow } from './sim/profile';
-import { normalizeMedia, buyMedia, upgradeMedia, publishArticle } from './sim/media';
+import { normalizeMedia, buyMedia, upgradeMedia, publishArticle, mediaCampaign } from './sim/media';
 import { normalizeEncounter, maybeEncounter, resolveEncounter } from './sim/encounter';
 import {
   acceptQuest,
@@ -412,6 +412,7 @@ interface Store {
   mediaBuy: (outletId: string) => void;
   mediaUpgrade: (outletId: string) => void;
   mediaPublish: (text: string, assetId?: string | null) => void;
+  mediaCampaign: (assetId: string, budget: number) => void;
 
   hubGoto: (locId: string) => void;
 
@@ -1007,6 +1008,13 @@ export const useStore = create<Store>((set, get) => ({
   mediaPublish: (text, assetId) => {
     const { sim, notify } = get();
     const res = publishArticle(sim, text, assetId);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  mediaCampaign: (assetId, budget) => {
+    const { sim, notify } = get();
+    const res = mediaCampaign(sim, assetId, budget);
     notify(res.msg, res.ok ? 'ok' : 'err');
     set((s) => ({ v: s.v + 1 }));
   },

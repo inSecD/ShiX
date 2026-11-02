@@ -1826,3 +1826,41 @@ function openLong(sim: SimState) {
 
   console.log('legacy & dinasti: score/claim/achievements/normalize ok');
 }
+
+// ---------- V3.5 refine: Media campaign + credibility ----------
+{
+  const sim = freshSim();
+  sim.cash = 1_000_000;
+  mediaMod.buyMedia(sim, 'portal');
+  const assetId = sim.order[0];
+
+  // ---- campaign butuh outlet ----
+  const noOutlet = freshSim();
+  const c0 = mediaMod.mediaCampaign(noOutlet, assetId, 1000);
+  if (c0.ok) throw new Error('campaign should fail without outlet');
+
+  // ---- campaign berhasil ----
+  const c1 = mediaMod.mediaCampaign(sim, assetId, 25_000);
+  if (!c1.ok) throw new Error('campaign should succeed: ' + c1.msg);
+  if (sim.media.campaigns.length !== 1) throw new Error('campaign should be recorded');
+  const hypeBefore = sim.instruments[assetId].hype;
+
+  // ---- tick menjalankan kampanye ----
+  for (let i = 0; i < 3; i++) mediaMod.mediaTick(sim);
+  if (sim.media.campaigns[0].ticksLeft !== 9) throw new Error('campaign ticksLeft should decrease');
+  if (sim.instruments[assetId].hype <= hypeBefore) throw new Error('campaign should boost hype');
+
+  // ---- credibility naik dari publish ----
+  const credBefore = sim.media.credibility;
+  // bypass cooldown
+  sim.media.lastPublishTick = -999;
+  mediaMod.publishArticle(sim, 'Artikel kredibel', assetId);
+  if (sim.media.credibility <= credBefore) throw new Error('publish should boost credibility');
+
+  // ---- normalize campaigns ----
+  const norm = mediaMod.normalizeMedia({ owned: [{ id: 'blog', boughtAt: 1, level: 1 }], influence: 10, credibility: 60, lastPublishTick: 1, articles: 1, campaigns: [{ assetId: 'BN', ticksLeft: 5, strength: 0.1 }] });
+  if (norm.campaigns.length !== 1) throw new Error('normalize should keep campaigns');
+  if (norm.campaigns[0].ticksLeft !== 5) throw new Error('normalize should keep ticksLeft');
+
+  console.log('media refine: campaign + credibility + tick + normalize ok');
+}

@@ -35,7 +35,7 @@ export function mediaDef(id: string): MediaOutletDef | undefined {
 }
 
 export function createMedia(): MediaState {
-  return { owned: [], influence: 0, lastPublishTick: -999, articles: 0 };
+  return { owned: [], influence: 0, credibility: 50, lastPublishTick: -999, articles: 0, campaigns: [] };
 }
 
 export function normalizeMedia(m: unknown): MediaState {
@@ -49,8 +49,14 @@ export function normalizeMedia(m: unknown): MediaState {
   return {
     owned,
     influence: Math.max(0, Math.min(100, Number(x.influence) || 0)),
+    credibility: Math.max(0, Math.min(100, Number(x.credibility) || 50)),
     lastPublishTick: Number(x.lastPublishTick) || -999,
-    articles: Math.max(0, Math.floor(Number(x.articles) || 0))
+    articles: Math.max(0, Math.floor(Number(x.articles) || 0)),
+    campaigns: Array.isArray(x.campaigns)
+      ? x.campaigns
+          .filter((c) => c && typeof c.assetId === 'string')
+          .map((c) => ({ assetId: c.assetId, ticksLeft: Math.max(0, Math.floor(Number(c.ticksLeft) || 0)), strength: Math.max(0, Number(c.strength) || 0) }))
+      : []
   };
 }
 
@@ -120,6 +126,7 @@ export function publishArticle(state: SimState, rawText: string, assetId?: strin
   const gainedFame = Math.min(5, Math.round(reach * 0.15));
   state.profile.followers += gainedFollowers;
   state.profile.fame = Math.max(0, Math.min(100, state.profile.fame + gainedFame));
+  state.media.credibility = Math.max(0, Math.min(100, state.media.credibility + 1));
 
   // efek ke pasar: kalau sebut aset, hype koin naik; hype pasar ikut naik sedikit
   let hypeMsg = '';
@@ -163,13 +170,37 @@ export function publishArticle(state: SimState, rawText: string, assetId?: strin
   };
 }
 
-/** tick media: pengaruh tumbuh pasif, upkeep dipotong dari cash */
+export function mediaCampaign(state: SimState, assetId: string, budget: number): MediaResult {
+  if (state.media.owned.length === 0) return { ok: false, msg: 'Beli outlet dulu' };
+  if (!state.instruments[assetId]) return { ok: false, msg: 'Aset tidak ditemukan' };
+  if (budget <= 0) return { ok: false, msg: 'Budget harus > 0' };
+  if (state.cash < budget) return { ok: false, msg: 'Cash kurang' };
+  const reach = mediaReach(state);
+  const strength = Math.min(0.25, 0.05 + reach * 0.003 + budget / 200_000);
+  state.cash -= budget;
+  state.media.campaigns.push({ assetId, ticksLeft: 12, strength });
+  state.media.influence = Math.max(0, Math.min(100, state.media.influence + reach * 0.5));
+  state.media.credibility = Math.max(0, Math.min(100, state.media.credibility + 0.5));
+  return { ok: true, msg: `Kampanye ${state.instruments[assetId].name} · 12 jam · kekuatan ${(strength * 100).toFixed(0)}%` };
+}
+
+/** tick media: pengaruh tumbuh pasif, upkeep dipotong, kampanye jalan */
 export function mediaTick(state: SimState): void {
   const m = state.media;
   if (m.owned.length === 0) return;
   const reach = mediaReach(state);
-  // pengaruh tumbuh pelan
   m.influence = Math.max(0, Math.min(100, m.influence + reach * 0.02));
+  m.credibility = Math.max(0, Math.min(100, m.credibility + 0.05));
+  // kampanye
+  const remaining: typeof m.campaigns = [];
+  for (const c of m.campaigns) {
+    const inst = state.instruments[c.assetId];
+    if (inst) inst.hype = Math.max(0, Math.min(1.8, inst.hype + c.strength * 0.02));
+    state.hypeIndex = Math.max(0, Math.min(100, state.hypeIndex + c.strength * 0.1));
+    c.ticksLeft -= 1;
+    if (c.ticksLeft > 0) remaining.push(c);
+  }
+  m.campaigns = remaining;
   // upkeep
   const upkeep = m.owned.reduce((s, o) => {
     const def = mediaDef(o.id);
@@ -178,7 +209,7 @@ export function mediaTick(state: SimState): void {
   if (state.cash >= upkeep) {
     state.cash -= upkeep;
   } else {
-    // nggak bayar upkeep → pengaruh turun
     m.influence = Math.max(0, Math.min(100, m.influence - 0.5));
+    m.credibility = Math.max(0, Math.min(100, m.credibility - 0.3));
   }
 }

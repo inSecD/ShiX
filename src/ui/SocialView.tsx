@@ -327,6 +327,7 @@ export function SocialView() {
   const mediaBuy = useStore((s) => s.mediaBuy);
   const mediaUpgrade = useStore((s) => s.mediaUpgrade);
   const mediaPublish = useStore((s) => s.mediaPublish);
+  const mediaCampaign = useStore((s) => s.mediaCampaign);
 
   const [tab, setTab] = useState<FeedTab>('fyp');
   const [query, setQuery] = useState('');
@@ -447,8 +448,10 @@ export function SocialView() {
         <div className="sx-sec">📰 Media Empire</div>
         <div className="sx-media-head">
           <span>Influence: {Math.round(sim.media.influence)}/100</span>
+          <span>Credibility: {Math.round(sim.media.credibility)}/100</span>
           <span>Reach: {mediaReach(sim)}</span>
           <span>Artikel: {sim.media.articles}</span>
+          <span>Kampanye: {sim.media.campaigns.length}</span>
         </div>
         <div className="sx-media-grid">
           {MEDIA_OUTLETS.map((o) => {
@@ -510,6 +513,16 @@ export function SocialView() {
             >
               📰 Publish
             </button>
+            {mediaAsset && (
+              <div className="sx-media-campaign">
+                <span className="tiny muted">Kampanye untuk aset terpilih:</span>
+                {[5_000, 25_000, 100_000].map((b) => (
+                  <button key={b} className="short" onClick={() => mediaCampaign(mediaAsset, b)}>
+                    ${b.toLocaleString('en-US')}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

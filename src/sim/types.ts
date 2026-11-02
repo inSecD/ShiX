@@ -278,12 +278,21 @@ export interface MediaOutletInstance {
   level: number;
 }
 
+export interface MediaCampaign {
+  assetId: string;
+  ticksLeft: number;
+  strength: number;
+}
+
 export interface MediaState {
   owned: MediaOutletInstance[];
   /** 0..100 — makin tinggi makin besar jangkauan & pengaruh narasi */
   influence: number;
+  /** 0..100 — kredibilitas media */
+  credibility: number;
   lastPublishTick: number;
   articles: number;
+  campaigns: MediaCampaign[];
 }
 export interface PoliticalState {
   party: string | null;
