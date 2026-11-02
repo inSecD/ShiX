@@ -25,6 +25,7 @@ import {
 } from '../sim/corporate';
 import { activePerks, perkHint } from '../sim/perks';
 import { POLITICAL_PARTIES, POLICY_DEFS } from '../sim/politics';
+import { LEGACY_ACHIEVEMENTS, legacyScore, netWorthOf } from '../sim/legacy';
 
 const CATS: { key: AssetCategory; label: string }[] = [
   { key: 'property', label: 'Properti' },
@@ -131,6 +132,9 @@ export function LifestyleView() {
   const politicsJoin = useStore((s) => s.politicsJoin);
   const politicsLobby = useStore((s) => s.politicsLobby);
   const politicsRun = useStore((s) => s.politicsRun);
+
+  const legacyClaim = useStore((s) => s.legacyClaim);
+  const legacyNameHeir = useStore((s) => s.legacyNameHeir);
 
   return (
     <div className="lifestyle">
@@ -367,6 +371,54 @@ export function LifestyleView() {
           <button className="short" onClick={() => politicsRun()}>
             🗳️ Ikut Pemilu
           </button>
+        </div>
+      </div>
+
+      <div className="panel">
+        <div className="panel-head">
+          <span>Legacy & Dinasti</span>
+          <span className="badge">
+            Prestise {Math.round(sim.legacy.prestige)} · skor {legacyScore(sim)} · dinasti {sim.legacy.dynasty}
+          </span>
+        </div>
+        <div className="panel-body">
+          <div className="tiny muted">
+            Kekayaan bersih {fmtUsd(netWorthOf(sim), true)} · pencapaian {sim.legacy.achievements.length}/{LEGACY_ACHIEVEMENTS.length}
+            {sim.legacy.heir ? ` · pewaris: ${sim.legacy.heir}` : ''}
+          </div>
+        </div>
+        <div className="asset-list">
+          {LEGACY_ACHIEVEMENTS.map((a) => {
+            const unlocked = sim.legacy.achievements.includes(a.id);
+            return (
+              <div className={`asset-row${unlocked ? ' owned' : ''}`} key={a.id}>
+                <span className="asset-ico">{a.icon}</span>
+                <div className="asset-copy">
+                  <div className="asset-name">{a.name}</div>
+                  <div className="tiny muted">{a.desc} · {a.reward}</div>
+                </div>
+                <div className="asset-actions">
+                  <span className="tiny muted">{unlocked ? '✓ Terbuka' : '🔒'}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="panel-body" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="short" onClick={() => legacyClaim()}>
+            Claim Prestise
+          </button>
+          <input
+            className="ct-input"
+            style={{ flex: 1, minWidth: 120 }}
+            placeholder="Nama pewaris…"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                legacyNameHeir((e.target as HTMLInputElement).value);
+                (e.target as HTMLInputElement).value = '';
+              }
+            }}
+          />
         </div>
       </div>
     </div>

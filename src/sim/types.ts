@@ -295,6 +295,15 @@ export interface PoliticalState {
   lobbying: number;
 }
 
+export interface LegacyState {
+  prestige: number;
+  dynasty: number;
+  heir: string;
+  achievements: string[];
+  lastTick: number;
+  score: number;
+}
+
 export interface LaunchToken {
   id: string;
   name: string;
@@ -448,6 +457,7 @@ export interface SimState {
   corporate: CorporateState;
   media: MediaState;
   political: PoliticalState;
+  legacy: LegacyState;
   life: LifeState;
   encounter: EncounterState;
   quests: QuestState;

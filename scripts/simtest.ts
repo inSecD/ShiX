@@ -37,6 +37,7 @@ import * as conversationMod from '../src/sim/conversation';
 import * as mediaMod from '../src/sim/media';
 import * as corporateMod from '../src/sim/corporate';
 import * as politicsMod from '../src/sim/politics';
+import * as legacyMod from '../src/sim/legacy';
 import * as ambienceMod from '../src/sim/ambience';
 import * as feedMod from '../src/sim/feed';
 import * as perksMod from '../src/sim/perks';
@@ -1760,4 +1761,68 @@ function openLong(sim: SimState) {
   if (norm.office !== 'mayor') throw new Error('normalize should keep office');
 
   console.log('politik & kebijakan: join/lobby/election/tick/normalize ok');
+}
+
+// ---------- V3.5 pilar 4: Legacy & Dinasti ----------
+{
+  const sim = freshSim();
+  sim.cash = 5_000_000;
+  // beri banyak fills
+  for (let i = 0; i < 100; i++) sim.fills.push({ id: `f${i}`, t: sim.simTime, instId: sim.order[0], side: 'buy', qty: 1, price: 100, fee: 0, pnl: 1, kind: 'spot-buy', note: '' });
+  sim.lifestyle.owned = ['house_basic', 'apartment', 'motor', 'sports_car', 'watch'];
+  sim.media.owned = [{ id: 'blog', boughtAt: 1, level: 1 }, { id: 'podcast', boughtAt: 1, level: 1 }, { id: 'portal', boughtAt: 1, level: 1 }];
+  sim.corporate.owned = [
+    { id: 'techcorp', level: 2, employees: 4, reputation: 60, ipo: true, sharesOutstanding: 1000, playerShares: 60, acquiredAt: 1 },
+    { id: 'mediaco', level: 1, employees: 2, reputation: 50, ipo: false, sharesOutstanding: 100, playerShares: 100, acquiredAt: 1 },
+    { id: 'bankcorp', level: 1, employees: 2, reputation: 50, ipo: false, sharesOutstanding: 100, playerShares: 100, acquiredAt: 1 }
+  ];
+  sim.political.policies = ['tax_cut', 'deregulation', 'subsidy'];
+  sim.profile.followers = 15000;
+  sim.ticks = 40 * 24;
+
+  const leg = legacyMod;
+
+  // ---- legacyScore > 0 ----
+  const score = leg.legacyScore(sim);
+  if (score <= 0) throw new Error('legacyScore should be > 0');
+
+  // ---- netWorthOf ----
+  if (leg.netWorthOf(sim) <= 0) throw new Error('netWorthOf should be > 0');
+
+  // ---- nameHeir ----
+  const heir = leg.nameHeir(sim, 'Jago');
+  if (!heir.ok) throw new Error('nameHeir should succeed');
+  if (sim.legacy.heir !== 'Jago') throw new Error('heir should be set');
+
+  // ---- claimPrestige ----
+  const claim = leg.claimPrestige(sim);
+  if (!claim.ok) throw new Error('claimPrestige should succeed: ' + claim.msg);
+  if (sim.legacy.prestige <= 0) throw new Error('prestige should increase');
+  if (sim.legacy.score !== score) throw new Error('score should be recorded');
+
+  // ---- claim lagi tanpa naik → gagal ----
+  const claim2 = leg.claimPrestige(sim);
+  if (claim2.ok) throw new Error('claimPrestige should fail without score increase');
+
+  // ---- legacyTick membuka pencapaian ----
+  leg.legacyTick(sim);
+  if (sim.legacy.achievements.length === 0) throw new Error('legacyTick should unlock achievements');
+  if (!sim.legacy.achievements.includes('nw_1m')) throw new Error('nw_1m should be unlocked');
+  if (!sim.legacy.achievements.includes('followers_10k')) throw new Error('followers_10k should be unlocked');
+  if (!sim.legacy.achievements.includes('media_mogul')) throw new Error('media_mogul should be unlocked');
+  if (!sim.legacy.achievements.includes('corp_raider')) throw new Error('corp_raider should be unlocked');
+  if (!sim.legacy.achievements.includes('politician')) throw new Error('politician should be unlocked');
+  if (!sim.legacy.achievements.includes('property_tycoon')) throw new Error('property_tycoon should be unlocked');
+  if (!sim.legacy.achievements.includes('master_trader')) throw new Error('master_trader should be unlocked');
+  if (!sim.legacy.achievements.includes('survivor')) throw new Error('survivor should be unlocked');
+
+  // ---- normalizeLegacy ----
+  const norm = leg.normalizeLegacy({ prestige: 500, dynasty: 1, heir: 'Jago', achievements: ['nw_1m', 'xxx'], lastTick: 10, score: 1000 });
+  if (norm.prestige !== 500) throw new Error('normalize should keep prestige');
+  if (norm.dynasty !== 1) throw new Error('normalize should keep dynasty');
+  if (norm.heir !== 'Jago') throw new Error('normalize should keep heir');
+  if (norm.achievements.length !== 1) throw new Error('normalize should filter invalid achievements');
+  if (norm.score !== 1000) throw new Error('normalize should keep score');
+
+  console.log('legacy & dinasti: score/claim/achievements/normalize ok');
 }

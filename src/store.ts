@@ -28,6 +28,7 @@ import { buyAsset, normalizeLifestyle, sellAsset } from './sim/lifestyle';
 import { buyBusiness, normalizeBusiness, upgradeBusiness } from './sim/business';
 import { normalizeCorporate, buyCorporate, hireCorporate, upgradeCorporate, ipoCorporate, acquireCorporate, dividendCorporate } from './sim/corporate';
 import { normalizePolitical, joinParty, lobbyPolicy, runElection } from './sim/politics';
+import { normalizeLegacy, claimPrestige, nameHeir } from './sim/legacy';
 import { feedFromYou, normalizeFeed, toggleLike, toggleRepost } from './sim/feed';
 import {
   applyJob,
@@ -208,6 +209,7 @@ function normalizeSim(sim: SimState, startingCash: number): SimState {
   sim.business = normalizeBusiness(sim.business, sim.ticks);
   sim.corporate = normalizeCorporate(sim.corporate);
   sim.political = normalizePolitical(sim.political);
+  sim.legacy = normalizeLegacy(sim.legacy);
   sim.life = normalizeLife(sim.life);
   sim.encounter = normalizeEncounter(sim.encounter);
   sim.quests = normalizeQuest(sim.quests);
@@ -399,6 +401,9 @@ interface Store {
   politicsJoin: (partyId: string) => void;
   politicsLobby: (policyId: string) => void;
   politicsRun: () => void;
+
+  legacyClaim: () => void;
+  legacyNameHeir: (name: string) => void;
 
   publishPost: (text: string, media?: PostMedia | null) => void;
   toggleFollow: (botId: string) => void;
@@ -951,6 +956,20 @@ export const useStore = create<Store>((set, get) => ({
   politicsRun: () => {
     const { sim, notify } = get();
     const res = runElection(sim);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  legacyClaim: () => {
+    const { sim, notify } = get();
+    const res = claimPrestige(sim);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  legacyNameHeir: (name) => {
+    const { sim, notify } = get();
+    const res = nameHeir(sim, name);
     notify(res.msg, res.ok ? 'ok' : 'err');
     set((s) => ({ v: s.v + 1 }));
   },

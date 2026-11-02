@@ -17,6 +17,7 @@ import { createSocial } from './social';
 import { businessesValue, businessTick, createBusiness } from './business';
 import { createCorporate, corporateTick } from './corporate';
 import { createPolitical, politicalTick } from './politics';
+import { createLegacy, legacyTick } from './legacy';
 import { createLife, lifeTick } from './life';
 import { createEncounter } from './encounter';
 import { createQuest } from './quest';
@@ -204,6 +205,7 @@ export function createSim(settings: Settings): SimState {
     business: createBusiness(),
   corporate: createCorporate(),
   political: createPolitical(),
+  legacy: createLegacy(),
     life: createLife(),
     encounter: createEncounter(),
     quests: createQuest(),
@@ -262,6 +264,7 @@ export function tick(state: SimState, settings: Settings, warmup = false): void 
   businessTick(state);
 corporateTick(state);
 politicalTick(state);
+legacyTick(state);
   lifeTick(state, warmup);
   feedTick(state, rng);
   profileTick(state);
