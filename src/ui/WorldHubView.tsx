@@ -15,7 +15,7 @@ import {
   locationHint
 } from '../sim/hub';
 
-const H_MAP = 340;
+const H_MAP = typeof window !== 'undefined' && window.innerWidth < 640 ? 420 : 340;
 
 /** gedung siluet deterministik (persen x, lebar persen, tinggi persen, warna) */
 const BUILDINGS: { x: number; w: number; h: number; c: string }[] = [
@@ -354,7 +354,8 @@ export function WorldHubView() {
     if (!el) return;
     const ro = new ResizeObserver((entries) => {
       const w = entries[0]?.contentRect.width ?? 360;
-      setWidth(w);
+      const minW = window.innerWidth < 768 ? 640 : 0;
+      setWidth(Math.max(w, minW));
     });
     ro.observe(el);
     return () => ro.disconnect();
@@ -567,7 +568,7 @@ export function WorldHubView() {
     hitsRef.current = [];
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const R = 15;
+    const R = w < 640 ? 12 : 15;
     for (const loc of LOCATIONS) {
       const unlocked = isLocationUnlocked(loc, scene.owned);
       const isCur = loc.id === scene.locId;
@@ -590,31 +591,73 @@ export function WorldHubView() {
         ctx.stroke();
       }
 
-      // pin
+      // glow untuk lokasi terbuka / sekarang
+      if (unlocked || isCur) {
+        ctx.save();
+        ctx.globalAlpha = isCur ? 0.3 : 0.1;
+        ctx.shadowColor = isCur ? '#16d09a' : '#4d8dff';
+        ctx.shadowBlur = isCur ? 16 : 10;
+        ctx.fillStyle = isCur ? '#16d09a' : '#4d8dff';
+        ctx.beginPath();
+        ctx.arc(mx, my, R + 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // pin (rounded square)
+      const pr = R;
+      const rx = mx - pr;
+      const ry = my - pr;
+      const rad = 5;
       ctx.beginPath();
-      ctx.arc(mx, my, R, 0, Math.PI * 2);
-      ctx.fillStyle = isCur ? '#12352b' : unlocked ? '#1a2338' : '#141a26';
+      ctx.moveTo(rx + rad, ry);
+      ctx.lineTo(rx + 2 * pr - rad, ry);
+      ctx.quadraticCurveTo(rx + 2 * pr, ry, rx + 2 * pr, ry + rad);
+      ctx.lineTo(rx + 2 * pr, ry + 2 * pr - rad);
+      ctx.quadraticCurveTo(rx + 2 * pr, ry + 2 * pr, rx + 2 * pr - rad, ry + 2 * pr);
+      ctx.lineTo(rx + rad, ry + 2 * pr);
+      ctx.quadraticCurveTo(rx, ry + 2 * pr, rx, ry + 2 * pr - rad);
+      ctx.lineTo(rx, ry + rad);
+      ctx.quadraticCurveTo(rx, ry, rx + rad, ry);
+      ctx.closePath();
+      const grad = ctx.createLinearGradient(rx, ry, rx, ry + 2 * pr);
+      if (isCur) { grad.addColorStop(0, '#1e5a44'); grad.addColorStop(1, '#0f2e24'); }
+      else if (unlocked) { grad.addColorStop(0, '#2a3555'); grad.addColorStop(1, '#1a2238'); }
+      else { grad.addColorStop(0, '#1c2230'); grad.addColorStop(1, '#12171f'); }
+      ctx.fillStyle = grad;
       ctx.fill();
-      ctx.lineWidth = isCur ? 2.4 : 1.4;
-      ctx.strokeStyle = isCur ? '#16d09a' : unlocked ? '#36455f' : '#232b3a';
+      ctx.lineWidth = isCur ? 2 : 1.2;
+      ctx.strokeStyle = isCur ? '#16d09a' : unlocked ? '#5a6a8a' : '#2a3344';
       ctx.stroke();
 
       // ikon
-      ctx.globalAlpha = unlocked ? 1 : 0.45;
-      ctx.font = '15px sans-serif';
+      ctx.globalAlpha = unlocked ? 1 : 0.4;
+      ctx.font = w < 640 ? '12px sans-serif' : '14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
       ctx.fillText(loc.icon, mx, my + 1);
       ctx.globalAlpha = 1;
 
-      // label
-      ctx.font = '10px sans-serif';
+      // label pill
+      ctx.font = w < 640 ? '8px sans-serif' : '10px sans-serif';
+      const tw = ctx.measureText(loc.name).width + 8;
+      const lx = mx - tw / 2;
+      const ly = my + R + (w < 640 ? 8 : 10);
+      ctx.fillStyle = 'rgba(8,12,20,0.85)';
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') ctx.roundRect(lx, ly - 7, tw, 14, 4);
+      else ctx.rect(lx, ly - 7, tw, 14);
+      ctx.fill();
       ctx.fillStyle = unlocked ? '#c7d3e6' : '#5a6579';
-      ctx.fillText(loc.name, mx, my + R + 10);
+      ctx.textBaseline = 'middle';
+      ctx.fillText(loc.name, mx, ly);
 
       // badge kunci
       if (!unlocked) {
         ctx.font = '9px sans-serif';
         ctx.fillStyle = '#6b7688';
-        ctx.fillText('🔒', mx + R - 3, my - R + 3);
+        ctx.textAlign = 'center';
+        ctx.fillText('🔒', mx + R - 2, my - R + 4);
       }
 
       hitsRef.current.push({ id: loc.id, x: loc.x, y: loc.y, r: (R + 5), unlocked });

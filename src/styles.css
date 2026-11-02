@@ -2629,12 +2629,14 @@ input[type='range']::-webkit-slider-thumb {
 .hub-map {
   position: relative;
   border-top: 1px solid var(--line);
-  overflow: hidden;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .hub-canvas {
   display: block;
   width: 100%;
+  min-width: 100%;
   touch-action: none;
   cursor: pointer;
 }
