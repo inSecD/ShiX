@@ -62,6 +62,34 @@ export const VENUE_INFO: Record<string, VenueInfo> = {
     crowd: 7,
     staff: { id: 'staff_gallery', name: 'Maya', emoji: '🖼️', role: 'kurator' }
   },
+  bar: {
+    locId: 'bar',
+    sign: 'BAR MALAM',
+    vibe: 'Redup · musik jazz · gelas berdenting',
+    crowd: 9,
+    staff: { id: 'staff_bar', name: 'Rizal', emoji: '🍸', role: 'bartender' }
+  },
+  kantor: {
+    locId: 'kantor',
+    sign: 'KANTOR',
+    vibe: 'AC dingin · keyboard berketik · kopi di meja',
+    crowd: 6,
+    staff: { id: 'staff_kantor', name: 'Ibu Rina', emoji: '📋', role: 'sekretaris' }
+  },
+  klub: {
+    locId: 'klub',
+    sign: 'KLUB MALAM',
+    vibe: 'Bass berat · lampu strobo · orang menari',
+    crowd: 14,
+    staff: { id: 'staff_klub', name: 'DJ Arka', emoji: '🎧', role: 'DJ' }
+  },
+  mal: {
+    locId: 'mal',
+    sign: 'MAL KOTA',
+    vibe: 'Ramai · neon toko · eskalator berputar',
+    crowd: 12,
+    staff: { id: 'staff_mal', name: 'Mas Dodo', emoji: '🛍️', role: 'info desk' }
+  },
   penthouse: {
     locId: 'penthouse',
     sign: 'PENTHOUSE',
@@ -266,6 +294,30 @@ const VENUE_LINES: Record<string, string[]> = {
     'Minuman di sini lebih mahal dari posisi gue.',
     'DJ-nya bagus. Chart-nya yang nggak enak didengar.',
     'Dari sini kota kelihatan kecil. Utang juga kecil. Bohong.'
+  ],
+  bar: [
+    'Bartender-nya udah hafal pesanan gue: whisky, tanpa es, tanpa stop loss.',
+    'Tadi ada yang curhat rugi di bar. Gue denger sambil pura-pura nggak.',
+    'Musik jazz di sini bikin chart terasa jauh. Sebentar doang.',
+    'Gelas kosong lebih jujur daripada analyst.'
+  ],
+  kantor: [
+    'Meeting pagi soal target Q3. Chart kantor lebih rapi dari chart pasar.',
+    'AC dingin bikin fokus, tapi kopi udah dingin juga.',
+    'Ada yang bawa laptop sambil trading di bawah meja.',
+    'Gue kerja di sini, tapi pikiran gue di bursa.'
+  ],
+  klub: [
+    'Bass-nya bikin chart terasa jauh. Sebentar doang, katanya.',
+    'Strobo nyala, semua orang menari. Besok pagi baru sadar.',
+    'DJ-nya ganti track, portfolio gue juga ganti arah.',
+    'Di sini nggak ada yang bahas candle. Untung.'
+  ],
+  mal: [
+    'Eskalator berputar, portfolio gue juga berputar.',
+    'Ada promo, semua orang belanja. Pasar nggak ada promo.',
+    'Food court penuh, tapi gue cuma nongkrong sambil mantau HP.',
+    'Mal ini lebih rame dari bursa pas jam makan siang.'
   ]
 };
 
@@ -412,7 +464,11 @@ export function staffLines(state: SimState, locId: string): string[] {
     garage: 'Mesin udah gue cek. Sekarang cek portfolio lo.',
     apartment: 'Lift arah bursa penuh tadi. Hati-hati bawa kopi.',
     gallery: 'Silakan lihat-lihat. Karya yang di pojok katanya bakal naik.',
-    penthouse: 'Rooftop penuh malam ini. Mau minum apa?'
+    penthouse: 'Rooftop penuh malam ini. Mau minum apa?',
+    bar: 'Gelas pertama on the house. Yang kedua bayar sendiri.',
+    kantor: 'Kopi di meja masih hangat. Rapat mulai lima menit lagi.',
+    klub: 'Earplug ada di kasir. Bass-nya nggak kenal kompromi.',
+    mal: 'Info desk buka sampai malam. Mau tanya arah toko?'
   };
 
   const lines = [greet, market, venueLine[locId] ?? `Suasana ${phase} lagi ramai.`];

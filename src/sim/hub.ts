@@ -125,6 +125,54 @@ export const LOCATIONS: LocationDef[] = [
     indoor: true
   },
   {
+    id: 'bar',
+    name: 'Bar Malam',
+    icon: '🍻',
+    x: 52,
+    y: 62,
+    mood: 'Malam',
+    desc: 'Lampu redup, musik jazz, gelas berdenting. Tempat curhat trader.',
+    flavor: 'Es berdenting di gelas dan bisikan soal posisi yang salah.',
+    requires: [],
+    indoor: true
+  },
+  {
+    id: 'kantor',
+    name: 'Kantor',
+    icon: '🏢',
+    x: 30,
+    y: 40,
+    mood: 'Sibuk',
+    desc: 'Meja, monitor, kopi. Tempat kerja dan rapat.',
+    flavor: 'Keyboard berketik dan AC dingin yang nggak pernah mati.',
+    requires: ['apartment'],
+    indoor: true
+  },
+  {
+    id: 'klub',
+    name: 'Klub Malam',
+    icon: '🪩',
+    x: 70,
+    y: 16,
+    mood: 'Gila',
+    desc: 'Bass berat, lampu strobo, orang menari. Lupa chart sejenak.',
+    flavor: 'Gelap, keras, dan semua orang pura-pura nggak lihat chart.',
+    requires: ['penthouse'],
+    indoor: true
+  },
+  {
+    id: 'mal',
+    name: 'Mal Kota',
+    icon: '🛍️',
+    x: 82,
+    y: 52,
+    mood: 'Rame',
+    desc: 'Toko, eskalator, makanan. Tempat belanja dan nongkrong.',
+    flavor: 'Neon toko dan bau popcorn bercampur parfum.',
+    requires: [],
+    indoor: true
+  },
+  {
     id: 'mansion',
     name: 'Mansion Bukit',
     icon: '🏰',

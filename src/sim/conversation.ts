@@ -506,6 +506,10 @@ const VENUE_ACTIVITY: Record<string, string> = {
   apartment: 'gue ngeliatin kota dari jendela',
   gallery: 'gue jalan pelan di antara lukisan',
   penthouse: 'gue di rooftop, musik rendah, kota di bawah',
+  bar: 'gue pesan satu, nunggu pasar tutup',
+  kantor: 'gue cek email sambil ngopi',
+  klub: 'gue di dekat speaker, bass-nya bikin chart terasa jauh',
+  mal: 'gue jalan-jalan sambil window shopping',
   street: 'gue cuma duduk di pinggir jalan, nunggu pasar buka'
 };
 

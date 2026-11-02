@@ -149,6 +149,38 @@ const VENUE_PAL: Record<string, VenuePalette> = {
     accent: '#c084fc',
     counter: '#232b45',
     glow: 'rgba(180,100,255,0.14)'
+  },
+  bar: {
+    wall: '#1a1622',
+    panel: '#15111d',
+    floor: '#0f0c16',
+    accent: '#ff6b9d',
+    counter: '#2a1f33',
+    glow: 'rgba(255,100,160,0.12)'
+  },
+  kantor: {
+    wall: '#1e2533',
+    panel: '#181f2b',
+    floor: '#121822',
+    accent: '#7ec8ff',
+    counter: '#253040',
+    glow: 'rgba(120,190,255,0.1)'
+  },
+  klub: {
+    wall: '#0f0a1a',
+    panel: '#0a0614',
+    floor: '#06040e',
+    accent: '#c084fc',
+    counter: '#1f1630',
+    glow: 'rgba(190,100,255,0.16)'
+  },
+  mal: {
+    wall: '#2a2a30',
+    panel: '#22222a',
+    floor: '#18181e',
+    accent: '#ffd27a',
+    counter: '#33333a',
+    glow: 'rgba(255,210,120,0.1)'
   }
 };
 

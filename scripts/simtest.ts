@@ -1469,6 +1469,22 @@ function openLong(sim: SimState) {
   );
 }
 
+// ---------- Phase 14 v6: venue baru (bar, kantor, klub, mal) ----------
+{
+  for (const id of ['bar', 'kantor', 'klub', 'mal']) {
+    const loc = hubMod.LOCATION_BY_ID[id];
+    if (!loc?.indoor) throw new Error(`${id} should be marked indoor`);
+    const scene = ambienceMod.venueScene(freshSim(), id);
+    if (!scene) throw new Error(`${id} should have a venue scene`);
+    if (scene.crowd.length !== ambienceMod.VENUE_INFO[id].crowd) throw new Error(`${id} crowd size mismatch`);
+    const chatter = ambienceMod.venueChatter(freshSim(), id, 0);
+    if (chatter.length < 2) throw new Error(`${id} should have chatter`);
+    const staff = ambienceMod.staffLines(freshSim(), id);
+    if (staff.length < 2) throw new Error(`${id} should have staff lines`);
+  }
+  console.log('venue baru: bar · kantor · klub · mal ok');
+}
+
 // ---------- Phase 14 v5: NPC conversation engine v2 ----------
 {
   const sim = freshSim();
