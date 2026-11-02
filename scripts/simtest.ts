@@ -1471,7 +1471,7 @@ function openLong(sim: SimState) {
 
 // ---------- Phase 14 v6: venue baru (bar, kantor, klub, mal) ----------
 {
-  for (const id of ['bar', 'kantor', 'klub', 'mal']) {
+  for (const id of ['bar', 'kantor', 'klub', 'mal', 'gym', 'restoran', 'bank', 'kantor_polisi', 'rumah_sakit', 'sekolah']) {
     const loc = hubMod.LOCATION_BY_ID[id];
     if (!loc?.indoor) throw new Error(`${id} should be marked indoor`);
     const scene = ambienceMod.venueScene(freshSim(), id);
@@ -1482,7 +1482,7 @@ function openLong(sim: SimState) {
     const staff = ambienceMod.staffLines(freshSim(), id);
     if (staff.length < 2) throw new Error(`${id} should have staff lines`);
   }
-  console.log('venue baru: bar · kantor · klub · mal ok');
+  console.log('venue baru: bar · kantor · klub · mal · gym · restoran · bank · polisi · rs · sekolah ok');
 }
 
 // ---------- Phase 14 v5: NPC conversation engine v2 ----------

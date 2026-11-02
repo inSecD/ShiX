@@ -181,6 +181,54 @@ const VENUE_PAL: Record<string, VenuePalette> = {
     accent: '#ffd27a',
     counter: '#33333a',
     glow: 'rgba(255,210,120,0.1)'
+  },
+  gym: {
+    wall: '#1a2228',
+    panel: '#151c22',
+    floor: '#10161c',
+    accent: '#6fd0ff',
+    counter: '#23303a',
+    glow: 'rgba(110,200,255,0.1)'
+  },
+  restoran: {
+    wall: '#2a1f1a',
+    panel: '#241a15',
+    floor: '#1a130f',
+    accent: '#ffb35c',
+    counter: '#3a2a1f',
+    glow: 'rgba(255,170,80,0.12)'
+  },
+  bank: {
+    wall: '#1e2533',
+    panel: '#181f2b',
+    floor: '#121822',
+    accent: '#7ec8ff',
+    counter: '#253040',
+    glow: 'rgba(120,190,255,0.1)'
+  },
+  kantor_polisi: {
+    wall: '#1a2030',
+    panel: '#151a28',
+    floor: '#10141f',
+    accent: '#6fd0ff',
+    counter: '#232a3a',
+    glow: 'rgba(110,200,255,0.1)'
+  },
+  rumah_sakit: {
+    wall: '#1e2430',
+    panel: '#181e28',
+    floor: '#121822',
+    accent: '#7be3b0',
+    counter: '#253040',
+    glow: 'rgba(120,230,180,0.1)'
+  },
+  sekolah: {
+    wall: '#2a2418',
+    panel: '#231e14',
+    floor: '#1a1610',
+    accent: '#ffd27a',
+    counter: '#332a1a',
+    glow: 'rgba(255,210,120,0.1)'
   }
 };
 

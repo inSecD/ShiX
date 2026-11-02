@@ -90,6 +90,48 @@ export const VENUE_INFO: Record<string, VenueInfo> = {
     crowd: 12,
     staff: { id: 'staff_mal', name: 'Mas Dodo', emoji: '🛍️', role: 'info desk' }
   },
+  gym: {
+    locId: 'gym',
+    sign: 'GYM',
+    vibe: 'Besi berdenting · keringat · cermin panjang',
+    crowd: 8,
+    staff: { id: 'staff_gym', name: 'Coach Dedi', emoji: '💪', role: 'trainer' }
+  },
+  restoran: {
+    locId: 'restoran',
+    sign: 'RESTORAN',
+    vibe: 'Lampu lilin · aroma steak · percakapan pelan',
+    crowd: 9,
+    staff: { id: 'staff_restoran', name: 'Mbak Tari', emoji: '🍽️', role: 'pelayan' }
+  },
+  bank: {
+    locId: 'bank',
+    sign: 'BANK',
+    vibe: 'Loket · antrian · brankas dingin',
+    crowd: 7,
+    staff: { id: 'staff_bank', name: 'Pak Andi', emoji: '🏦', role: 'teller' }
+  },
+  kantor_polisi: {
+    locId: 'kantor_polisi',
+    sign: 'POLISI',
+    vibe: 'Berkas · radio · langkah tegas',
+    crowd: 5,
+    staff: { id: 'staff_polisi', name: 'Bripka Rudi', emoji: '🚓', role: 'petugas' }
+  },
+  rumah_sakit: {
+    locId: 'rumah_sakit',
+    sign: 'RUMAH SAKIT',
+    vibe: 'Koridor putih · bau antiseptik · monitor berbunyi',
+    crowd: 6,
+    staff: { id: 'staff_rs', name: 'Perawat Lina', emoji: '🏥', role: 'perawat' }
+  },
+  sekolah: {
+    locId: 'sekolah',
+    sign: 'SEKOLAH',
+    vibe: 'Kelas · papan tulis · bel berbunyi',
+    crowd: 10,
+    staff: { id: 'staff_sekolah', name: 'Bu Wati', emoji: '📚', role: 'guru' }
+  },
   penthouse: {
     locId: 'penthouse',
     sign: 'PENTHOUSE',
@@ -318,6 +360,42 @@ const VENUE_LINES: Record<string, string[]> = {
     'Ada promo, semua orang belanja. Pasar nggak ada promo.',
     'Food court penuh, tapi gue cuma nongkrong sambil mantau HP.',
     'Mal ini lebih rame dari bursa pas jam makan siang.'
+  ],
+  gym: [
+    'Besi berdenting. Chart juga berdenting, tapi beda bunyi.',
+    'Tadi ada yang angkat beban sambil mantau HP. Dedikasi.',
+    'Kardio bikin napas berat, tapi pikiran jadi ringan.',
+    'Gue nggak tahu mana yang lebih berat: deadlift atau cut loss.'
+  ],
+  restoran: [
+    'Steak-nya enak. Chart-nya nggak. Tapi sekarang gue nggak peduli.',
+    'Meja pojok itu favorit gue. Bisa mantau HP tanpa ketahuan.',
+    'Pelayan-nya udah hafal pesanan gue: air putih, tanpa es.',
+    'Makan enak bikin portfolio terasa lebih kecil. Sementara.'
+  ],
+  bank: [
+    'Antrian panjang. Pasar juga antrian, tapi nggak kelihatan.',
+    'Teller-nya ramah. Beda sama market yang nggak pernah ramah.',
+    'Brankas dingin. Gue lebih suka dingin chart yang naik.',
+    'Gue ngurus administrasi. Boring, tapi perlu.'
+  ],
+  kantor_polisi: [
+    'Radio berderak. Pasar juga berderak, tapi tanpa sirine.',
+    'Berkas bertumpuk. Chart gue juga bertumpuk, tapi nggak rapi.',
+    'Petugasnya tegas. Market nggak tegas, market licin.',
+    'Gue lapor kehilangan. Bukan uang, tapi kesabaran.'
+  ],
+  rumah_sakit: [
+    'Monitor berbunyi. Chart juga berbunyi, tapi beda nada.',
+    'Bau antiseptik. Lebih enak dari bau rugi.',
+    'Perawat-nya cepat. Market nggak pernah cepat pas gue butuh.',
+    'Gue istirahat. Chart boleh istirahat juga.'
+  ],
+  sekolah: [
+    'Bel berbunyi. Chart juga berbunyi, tapi nggak ada jam pulang.',
+    'Papan tulis penuh rumus. Chart penuh angka, tapi nggak ada guru.',
+    'Tawa di koridor. Pasar nggak pernah tawa.',
+    'Gue belajar. Market juga belajar, tapi nggak pernah lulus.'
   ]
 };
 
@@ -468,7 +546,13 @@ export function staffLines(state: SimState, locId: string): string[] {
     bar: 'Gelas pertama on the house. Yang kedua bayar sendiri.',
     kantor: 'Kopi di meja masih hangat. Rapat mulai lima menit lagi.',
     klub: 'Earplug ada di kasir. Bass-nya nggak kenal kompromi.',
-    mal: 'Info desk buka sampai malam. Mau tanya arah toko?'
+    mal: 'Info desk buka sampai malam. Mau tanya arah toko?',
+    gym: 'Towel ada di loker. Jangan lupa minum.',
+    restoran: 'Menu hari ini: steak, pasta, dan chart yang nggak enak.',
+    bank: 'Loket 3 buka. Isi formulir dulu.',
+    kantor_polisi: 'Lapor di meja depan. Bawa identitas.',
+    rumah_sakit: 'Pendaftaran di lobi. Silakan duduk.',
+    sekolah: 'Bel masuk jam delapan. Jangan terlambat.'
   };
 
   const lines = [greet, market, venueLine[locId] ?? `Suasana ${phase} lagi ramai.`];

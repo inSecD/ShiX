@@ -173,6 +173,78 @@ export const LOCATIONS: LocationDef[] = [
     indoor: true
   },
   {
+    id: 'gym',
+    name: 'Gym',
+    icon: '🏋️',
+    x: 15,
+    y: 30,
+    mood: 'Sweat',
+    desc: 'Besi, kardio, dan cermin. Tempat buang stres.',
+    flavor: 'Besi berdenting dan napas berat di antara set.',
+    requires: [],
+    indoor: true
+  },
+  {
+    id: 'restoran',
+    name: 'Restoran',
+    icon: '🍽️',
+    x: 60,
+    y: 56,
+    mood: 'Hangat',
+    desc: 'Meja makan, lampu lilin, menu panjang.',
+    flavor: 'Aroma steak dan percakapan pelan di meja.',
+    requires: [],
+    indoor: true
+  },
+  {
+    id: 'bank',
+    name: 'Bank',
+    icon: '🏦',
+    x: 40,
+    y: 60,
+    mood: 'Formal',
+    desc: 'Loket, antrian, dan brankas. Tempat uang nginap.',
+    flavor: 'Kertas berstempel dan lampu neon yang dingin.',
+    requires: ['apartment'],
+    indoor: true
+  },
+  {
+    id: 'kantor_polisi',
+    name: 'Kantor Polisi',
+    icon: '🚓',
+    x: 20,
+    y: 20,
+    mood: 'Tegas',
+    desc: 'Meja, berkas, dan radio. Tempat lapor.',
+    flavor: 'Radio berderak dan langkah kaki di koridor.',
+    requires: ['mansion'],
+    indoor: true
+  },
+  {
+    id: 'rumah_sakit',
+    name: 'Rumah Sakit',
+    icon: '🏥',
+    x: 75,
+    y: 40,
+    mood: 'Tenang',
+    desc: 'Koridor putih, bau antiseptik. Tempat sembuh.',
+    flavor: 'Langkah pelan dan bunyi monitor di kejauhan.',
+    requires: [],
+    indoor: true
+  },
+  {
+    id: 'sekolah',
+    name: 'Sekolah',
+    icon: '🏫',
+    x: 45,
+    y: 78,
+    mood: 'Riang',
+    desc: 'Kelas, papan tulis, dan bel. Tempat belajar.',
+    flavor: 'Bel berbunyi dan tawa di koridor.',
+    requires: [],
+    indoor: true
+  },
+  {
     id: 'mansion',
     name: 'Mansion Bukit',
     icon: '🏰',

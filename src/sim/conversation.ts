@@ -510,6 +510,12 @@ const VENUE_ACTIVITY: Record<string, string> = {
   kantor: 'gue cek email sambil ngopi',
   klub: 'gue di dekat speaker, bass-nya bikin chart terasa jauh',
   mal: 'gue jalan-jalan sambil window shopping',
+  gym: 'gue angkat beban sambil mantau HP',
+  restoran: 'gue makan enak sambil mantau HP',
+  bank: 'gue ngurus administrasi',
+  kantor_polisi: 'gue lapor kehilangan kesabaran',
+  rumah_sakit: 'gue istirahat, chart boleh istirahat juga',
+  sekolah: 'gue belajar, market juga belajar tapi nggak lulus',
   street: 'gue cuma duduk di pinggir jalan, nunggu pasar buka'
 };
 
