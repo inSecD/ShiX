@@ -285,6 +285,16 @@ export interface MediaState {
   lastPublishTick: number;
   articles: number;
 }
+export interface PoliticalState {
+  party: string | null;
+  reputation: number;
+  influence: number;
+  policies: string[];
+  lastElectionTick: number;
+  office: 'none' | 'mayor' | 'governor' | 'minister';
+  lobbying: number;
+}
+
 export interface LaunchToken {
   id: string;
   name: string;
@@ -320,6 +330,7 @@ export interface MacroState {
   usd: number;
   liquidity: number;
   regime: string;
+  gdpGrowth: number;
 }
 
 export interface Fill {
@@ -436,6 +447,7 @@ export interface SimState {
   business: BusinessState;
   corporate: CorporateState;
   media: MediaState;
+  political: PoliticalState;
   life: LifeState;
   encounter: EncounterState;
   quests: QuestState;

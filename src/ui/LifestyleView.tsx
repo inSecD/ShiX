@@ -24,6 +24,7 @@ import {
   corporateValue
 } from '../sim/corporate';
 import { activePerks, perkHint } from '../sim/perks';
+import { POLITICAL_PARTIES, POLICY_DEFS } from '../sim/politics';
 
 const CATS: { key: AssetCategory; label: string }[] = [
   { key: 'property', label: 'Properti' },
@@ -126,6 +127,10 @@ export function LifestyleView() {
   const corpIpo = useStore((s) => s.corpIpo);
   const corpAcquire = useStore((s) => s.corpAcquire);
   const corpDividend = useStore((s) => s.corpDividend);
+
+  const politicsJoin = useStore((s) => s.politicsJoin);
+  const politicsLobby = useStore((s) => s.politicsLobby);
+  const politicsRun = useStore((s) => s.politicsRun);
 
   return (
     <div className="lifestyle">
@@ -308,6 +313,61 @@ export function LifestyleView() {
             </div>
           </div>
         )}
+      </div>
+
+      <div className="panel">
+        <div className="panel-head">
+          <span>Politik & Kebijakan</span>
+          <span className="badge">
+            {sim.political.office} · rep {Math.round(sim.political.reputation)} · pengaruh {Math.round(sim.political.influence)}
+          </span>
+        </div>
+        <div className="panel-body">
+          <div className="tiny muted">
+            Partai: {sim.political.party ? POLITICAL_PARTIES.find((p) => p.id === sim.political.party)?.name : 'belum bergabung'} ·
+            kebijakan disahkan: {sim.political.policies.length}
+          </div>
+        </div>
+        <div className="asset-list">
+          {POLITICAL_PARTIES.map((p) => (
+            <div className={`asset-row${sim.political.party === p.id ? ' owned' : ''}`} key={p.id}>
+              <span className="asset-ico">{p.icon}</span>
+              <div className="asset-copy">
+                <div className="asset-name">{p.name}</div>
+                <div className="tiny muted">{p.ideology} · {p.desc}</div>
+              </div>
+              <div className="asset-actions">
+                <button className="short" disabled={sim.political.party === p.id} onClick={() => politicsJoin(p.id)}>
+                  {sim.political.party === p.id ? 'Anggota' : 'Gabung'}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="asset-list">
+          {POLICY_DEFS.map((pol) => {
+            const enacted = sim.political.policies.includes(pol.id);
+            return (
+              <div className={`asset-row${enacted ? ' owned' : ''}`} key={pol.id}>
+                <span className="asset-ico">{pol.icon}</span>
+                <div className="asset-copy">
+                  <div className="asset-name">{pol.name}</div>
+                  <div className="tiny muted">{pol.desc}</div>
+                </div>
+                <div className="asset-actions">
+                  <button className="short" disabled={enacted || sim.cash < pol.cost} onClick={() => politicsLobby(pol.id)}>
+                    {enacted ? 'Disahkan' : `Lobi $${pol.cost.toLocaleString('en-US')}`}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="panel-body">
+          <button className="short" onClick={() => politicsRun()}>
+            🗳️ Ikut Pemilu
+          </button>
+        </div>
       </div>
     </div>
   );

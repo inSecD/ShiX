@@ -36,6 +36,7 @@ import * as dialogueMod from '../src/sim/dialogue';
 import * as conversationMod from '../src/sim/conversation';
 import * as mediaMod from '../src/sim/media';
 import * as corporateMod from '../src/sim/corporate';
+import * as politicsMod from '../src/sim/politics';
 import * as ambienceMod from '../src/sim/ambience';
 import * as feedMod from '../src/sim/feed';
 import * as perksMod from '../src/sim/perks';
@@ -1700,4 +1701,63 @@ function openLong(sim: SimState) {
   if (norm.owned[0].ipo !== true) throw new Error('normalizeCorporate should keep ipo');
 
   console.log('corporate & bisnis: buy/hire/upgrade/ipo/dividen/acquire/tick/normalize ok');
+}
+
+// ---------- V3.5 pilar 3: Politik & Kebijakan ----------
+{
+  const sim = freshSim();
+  sim.cash = 1_000_000;
+  const pol = politicsMod;
+
+  // ---- join partai ----
+  const join = pol.joinParty(sim, 'progress');
+  if (!join.ok) throw new Error('joinParty should succeed: ' + join.msg);
+  if (sim.political.party !== 'progress') throw new Error('party should be progress');
+  if (sim.political.reputation < 10) throw new Error('reputation should be >=10 after join');
+
+  // ---- join partai yang sama → gagal ----
+  const join2 = pol.joinParty(sim, 'progress');
+  if (join2.ok) throw new Error('joinParty duplicate should fail');
+
+  // ---- lobi kebijakan ----
+  const lobby = pol.lobbyPolicy(sim, 'tax_cut');
+  // outcome probabilistik; cek cash berkurang
+  if (sim.cash >= 1_000_000) throw new Error('lobby should deduct cash');
+  // kalau berhasil, policy ada
+  if (lobby.ok && !sim.political.policies.includes('tax_cut')) throw new Error('policy should be enacted on success');
+
+  // ---- lobi kebijakan yang sudah disahkan → gagal (jika berhasil) ----
+  if (sim.political.policies.includes('tax_cut')) {
+    const lobby2 = pol.lobbyPolicy(sim, 'tax_cut');
+    if (lobby2.ok) throw new Error('lobby duplicate should fail');
+  }
+
+  // ---- lobi tanpa cash cukup → gagal ----
+  const poor = freshSim();
+  poor.cash = 100;
+  const lobbyPoor = pol.lobbyPolicy(poor, 'tax_cut');
+  if (lobbyPoor.ok) throw new Error('lobby should fail without cash');
+
+  // ---- run election ----
+  // beri reputasi tinggi
+  sim.political.reputation = 80;
+  sim.political.influence = 50;
+  sim.political.policies = ['tax_cut', 'deregulation'];
+  pol.runElection(sim);
+  // outcome probabilistik; cek lastElectionTick updated
+  if (sim.political.lastElectionTick !== sim.ticks) throw new Error('lastElectionTick should update');
+
+  // ---- politicalTick ----
+  pol.politicalTick(sim);
+  // reputasi drift, tapi tidak error
+  if (!Number.isFinite(sim.political.reputation)) throw new Error('reputation should be finite');
+
+  // ---- normalizePolitical ----
+  const norm = pol.normalizePolitical({ party: 'progress', reputation: 60, influence: 40, policies: ['tax_cut', 'xxx'], lastElectionTick: 5, office: 'mayor', lobbying: 2 });
+  if (norm.party !== 'progress') throw new Error('normalize should keep party');
+  if (norm.reputation !== 60) throw new Error('normalize should keep reputation');
+  if (norm.policies.length !== 1) throw new Error('normalize should filter invalid policies');
+  if (norm.office !== 'mayor') throw new Error('normalize should keep office');
+
+  console.log('politik & kebijakan: join/lobby/election/tick/normalize ok');
 }

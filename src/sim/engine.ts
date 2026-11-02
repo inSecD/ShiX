@@ -16,6 +16,7 @@ import { createHub } from './hub';
 import { createSocial } from './social';
 import { businessesValue, businessTick, createBusiness } from './business';
 import { createCorporate, corporateTick } from './corporate';
+import { createPolitical, politicalTick } from './politics';
 import { createLife, lifeTick } from './life';
 import { createEncounter } from './encounter';
 import { createQuest } from './quest';
@@ -171,7 +172,8 @@ export function createSim(settings: Settings): SimState {
       rate: 4.85,
       usd: 0,
       liquidity: 0.15,
-      regime: 'Chop'
+      regime: 'Chop',
+      gdpGrowth: 0.02
     },
     sectorHeat: {},
     instruments,
@@ -201,6 +203,7 @@ export function createSim(settings: Settings): SimState {
     hub: createHub(),
     business: createBusiness(),
   corporate: createCorporate(),
+  political: createPolitical(),
     life: createLife(),
     encounter: createEncounter(),
     quests: createQuest(),
@@ -258,6 +261,7 @@ export function tick(state: SimState, settings: Settings, warmup = false): void 
   lifestyleTick(state);
   businessTick(state);
 corporateTick(state);
+politicalTick(state);
   lifeTick(state, warmup);
   feedTick(state, rng);
   profileTick(state);
