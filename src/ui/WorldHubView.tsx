@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../store';
 import { STRATEGY_LABEL } from '../sim/bots';
-import { chatCooldownLeft, friendshipOf, npcsAtLocation } from '../sim/social';
+import { chatCooldownLeft, friendshipOf, lastNpcMemory, npcsAtLocation } from '../sim/social';
 import { postCooldownLeft } from '../sim/profile';
 import { LifePanel } from './LifePanel';
 import { QuestPanel, RelationshipPanel, MinigamePanel, MetaPanel } from './HubExtras';
@@ -197,6 +197,31 @@ export function WorldHubView() {
 
     const X = (p: number) => (p / 100) * w;
     const Y = (p: number) => (p / 100) * H;
+
+    const locNow = LOCATION_BY_ID[sceneRef.current.locId];
+    if (locNow?.indoor) {
+      drawInterior(ctx, w, X, Y);
+    } else {
+      drawOutdoor(walking);
+    }
+  }
+
+  function drawOutdoor(walking: boolean) {
+    const cv = canvasRef.current;
+    if (!cv) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    const w = widthRef.current;
+    const H = H_MAP;
+    cv.width = Math.max(1, Math.floor(w * dpr));
+    cv.height = Math.floor(H * dpr);
+    cv.style.height = `${H}px`;
+    const ctx = cv.getContext('2d');
+    if (!ctx) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, H);
+
+    const X = (p: number) => (p / 100) * w;
+    const Y = (p: number) => (p / 100) * H;
     const time = performance.now() / 1000;
 
     // langit
@@ -366,6 +391,10 @@ export function WorldHubView() {
     // avatar
     const ax = X(posRef.current.x);
     const ay = Y(posRef.current.y);
+    drawAvatar(ctx, ax, ay, walking, time);
+  }
+
+  function drawAvatar(ctx: CanvasRenderingContext2D, ax: number, ay: number, walking: boolean, time: number) {
     const bob = walking ? Math.abs(Math.sin(time * 9)) * 2.5 : Math.sin(time * 2) * 0.8;
     // bayangan
     ctx.beginPath();
@@ -391,6 +420,57 @@ export function WorldHubView() {
     ctx.moveTo(ax + 2, ay + 1 - bob);
     ctx.lineTo(ax + 2 + leg, ay + 9 - bob);
     ctx.stroke();
+  }
+
+  /** interior scene (Phase 14 v3): dinding, jendela, meja, NPC + bubble */
+  function drawInterior(ctx: CanvasRenderingContext2D, w: number, X: (p: number) => number, Y: (p: number) => number) {
+    // dinding
+    ctx.fillStyle = '#202940';
+    ctx.fillRect(0, 0, w, H_MAP);
+    // jendela malam
+    const wx = X(6);
+    const wy = Y(10);
+    const ww = X(14);
+    const wh = 42;
+    const sky = ctx.createLinearGradient(0, wy, 0, wy + wh);
+    sky.addColorStop(0, '#0a0f1e');
+    sky.addColorStop(1, '#1c2c4e');
+    ctx.fillStyle = sky;
+    ctx.fillRect(wx, wy, ww, wh);
+    // gudang / lantai
+    ctx.fillStyle = '#141a2a';
+    ctx.fillRect(0, Y(62), w, H_MAP - Y(62));
+    // meja panjang
+    const tableY = Y(58);
+    ctx.fillStyle = '#2b3550';
+    ctx.fillRect(X(8), tableY, X(84), 5);
+    // NPC duduk di meja + bubble ingatan
+    const npcs = npcsAtLocation(sim, sceneRef.current.locId);
+    npcs.slice(0, 4).forEach((n, i) => {
+      const cx = X(18 + i * 20);
+      const cy = tableY - 12;
+      const mem = lastNpcMemory(sim, n.id);
+      const bubbleText = mem && mem.ev ? mem.text.slice(0, 26) : `${n.name} ngobrol.`;
+      const tw = ctx.measureText(bubbleText).width + 10;
+      const bx = Math.max(4, Math.min(cx - tw / 2, w - tw - 4));
+      ctx.fillStyle = 'rgba(10,14,24,0.92)';
+      ctx.fillRect(bx, cy - 34, tw, 13);
+      ctx.strokeStyle = '#3a4a6b';
+      ctx.strokeRect(bx, cy - 34, tw, 13);
+      ctx.fillStyle = '#c7d3e6';
+      ctx.font = '10px sans-serif';
+      ctx.fillText(bubbleText, bx + 5, cy - 27);
+      // kursi/NPC
+      ctx.fillStyle = '#4d8dff';
+      ctx.fillRect(cx - 5, cy - 10, 10, 12);
+      ctx.fillStyle = '#f2d3b3';
+      ctx.beginPath();
+      ctx.arc(cx, cy - 14, 4.2, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    // pintu keluar (pojok)
+    ctx.fillStyle = '#0e1424';
+    ctx.fillRect(X(90), Y(50), 10, 14);
   }
 
   function onPointer(e: React.PointerEvent<HTMLCanvasElement>) {

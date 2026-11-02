@@ -1417,3 +1417,12 @@ function openLong(sim: SimState) {
 
   console.log('npc brain: memory/trade+ctx ok | chat lines ok | normalize ok');
 }
+
+// ---------- Phase 14 v3: interior scenes ----------
+{
+  const cafe = hubMod.LOCATION_BY_ID['cafe'];
+  if (!cafe?.indoor) throw new Error('cafe should be marked indoor');
+  const park = hubMod.LOCATION_BY_ID['park'];
+  if (park?.indoor) throw new Error('park should stay outdoor');
+  console.log('interior: cafe indoor ok | park outdoor ok');
+}

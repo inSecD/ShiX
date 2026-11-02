@@ -13,6 +13,8 @@ export interface LocationDef {
   flavor: string;
   /** aset yang harus dimiliki buat membuka lokasi (any-of). kosong = selalu terbuka */
   requires: string[];
+  /** indoor: ada scene interior (cafe, rumah, dll) — avatar masuk ke dalam */
+  indoor?: boolean;
 }
 
 /** peta dunia: kota (kiri/atas), residensial (tengah/bawah), waterfront (kanan/bawah), bukit+udara (kanan/atas) */
@@ -48,7 +50,8 @@ export const LOCATIONS: LocationDef[] = [
     mood: 'Santai',
     desc: 'Nongkrong sesama trader. Rumornya mengalir di sini.',
     flavor: 'Secangkir kopi dingin dan dua orang heboh soal chart.',
-    requires: []
+    requires: [],
+    indoor: true
   },
   {
     id: 'bursa',
@@ -70,7 +73,8 @@ export const LOCATIONS: LocationDef[] = [
     mood: 'Pulang',
     desc: 'Tempat pulang pertama. Sederhana, tapi punya arti.',
     flavor: 'Aroma masakan dan lampu hangat menunggu di balik pintu.',
-    requires: ['house_basic', 'watch']
+    requires: ['house_basic', 'watch'],
+    indoor: true
   },
   {
     id: 'garage',
@@ -81,7 +85,8 @@ export const LOCATIONS: LocationDef[] = [
     mood: 'Mesin',
     desc: 'Sarang kendaraan. Bensin, knalpot, dan ambisi.',
     flavor: 'Bau oli dan detak mesin yang baru dinyalakan.',
-    requires: ['motor', 'sports_car', 'classic_car']
+    requires: ['motor', 'sports_car', 'classic_car'],
+    indoor: true
   },
   {
     id: 'apartment',
@@ -92,7 +97,8 @@ export const LOCATIONS: LocationDef[] = [
     mood: 'Modern',
     desc: 'Lantai tinggi dekat bursa. Pemandangan kota 24 jam.',
     flavor: 'Kaca floor-to-ceiling dan lift yang selalu dingin.',
-    requires: ['apartment']
+    requires: ['apartment'],
+    indoor: true
   },
   {
     id: 'gallery',
@@ -103,7 +109,8 @@ export const LOCATIONS: LocationDef[] = [
     mood: 'Halus',
     desc: 'Dinding putih dan karya yang nilainya naik pelan-pelan.',
     flavor: 'Bisik pelan, lantai kayu, dan satu karya yang bikin berhenti.',
-    requires: ['art']
+    requires: ['art'],
+    indoor: true
   },
   {
     id: 'penthouse',
@@ -114,7 +121,8 @@ export const LOCATIONS: LocationDef[] = [
     mood: 'Elite',
     desc: 'Atap kota. Rooftop party sampai fajar.',
     flavor: 'DJ set jauh di bawah, kota berkilau seperti peta bintang.',
-    requires: ['penthouse']
+    requires: ['penthouse'],
+    indoor: true
   },
   {
     id: 'mansion',
