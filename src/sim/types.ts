@@ -256,6 +256,22 @@ export interface ProfileState {
   posts: number;
 }
 
+export interface CorporateCompanyInstance {
+  id: string;
+  level: number;
+  employees: number;
+  reputation: number;
+  ipo: boolean;
+  sharesOutstanding: number;
+  playerShares: number;
+  acquiredAt: number;
+}
+
+export interface CorporateState {
+  owned: CorporateCompanyInstance[];
+  lastTick: number;
+}
+
 export interface MediaOutletInstance {
   id: string;
   boughtAt: number;
@@ -418,6 +434,7 @@ export interface SimState {
   lifestyle: LifestyleState;
   hub: HubState;
   business: BusinessState;
+  corporate: CorporateState;
   media: MediaState;
   life: LifeState;
   encounter: EncounterState;

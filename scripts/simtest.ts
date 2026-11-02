@@ -35,6 +35,7 @@ import * as metaMod from '../src/sim/meta';
 import * as dialogueMod from '../src/sim/dialogue';
 import * as conversationMod from '../src/sim/conversation';
 import * as mediaMod from '../src/sim/media';
+import * as corporateMod from '../src/sim/corporate';
 import * as ambienceMod from '../src/sim/ambience';
 import * as feedMod from '../src/sim/feed';
 import * as perksMod from '../src/sim/perks';
@@ -1628,4 +1629,75 @@ function openLong(sim: SimState) {
   if (sim2.cash >= cashBefore) throw new Error('mediaTick should deduct upkeep');
 
   console.log('media & influence: buy/publish/upgrade/reach/tick/normalize ok');
+}
+
+// ---------- V3.5 pilar 2: Corporate & Bisnis ----------
+{
+  const sim = freshSim();
+  sim.cash = 2_000_000;
+  const corp = corporateMod;
+
+  // ---- beli perusahaan ----
+  const buy = corp.buyCorporate(sim, 'techcorp');
+  if (!buy.ok) throw new Error('buyCorporate should succeed: ' + buy.msg);
+  if (sim.corporate.owned.length !== 1) throw new Error('owned should have 1 company');
+  const inst = sim.corporate.owned[0];
+  if (inst.id !== 'techcorp' || inst.employees !== 2) throw new Error('initial employees should be 2');
+
+  // ---- beli duplikat → gagal ----
+  const buy2 = corp.buyCorporate(sim, 'techcorp');
+  if (buy2.ok) throw new Error('buyCorporate duplicate should fail');
+
+  // ---- beli tanpa cash → gagal ----
+  const poor = freshSim();
+  poor.cash = 100;
+  const buyPoor = corp.buyCorporate(poor, 'bankcorp');
+  if (buyPoor.ok) throw new Error('buyCorporate should fail without cash');
+
+  // ---- hire karyawan ----
+  const hire = corp.hireCorporate(sim, 'techcorp');
+  if (!hire.ok) throw new Error('hireCorporate should succeed: ' + hire.msg);
+  if (sim.corporate.owned[0].employees !== 3) throw new Error('employees should be 3');
+  // hire sampai penuh
+  while (inst.employees < 6) corp.hireCorporate(sim, 'techcorp');
+  const hireFull = corp.hireCorporate(sim, 'techcorp');
+  if (hireFull.ok) throw new Error('hireCorporate should fail when full');
+
+  // ---- upgrade ----
+  const up = corp.upgradeCorporate(sim, 'techcorp');
+  if (!up.ok) throw new Error('upgradeCorporate should succeed: ' + up.msg);
+  if (inst.level !== 2) throw new Error('level should be 2');
+
+  // ---- IPO butuh level≥2 & employees≥3 ----
+  const ipo = corp.ipoCorporate(sim, 'techcorp');
+  if (!ipo.ok) throw new Error('ipoCorporate should succeed: ' + ipo.msg);
+  if (!inst.ipo) throw new Error('ipo flag should be true');
+  if (inst.playerShares !== 60) throw new Error('playerShares should be 60 after IPO');
+  if (inst.sharesOutstanding !== 1000) throw new Error('sharesOutstanding should be 1000');
+
+  // ---- IPO duplikat → gagal ----
+  const ipo2 = corp.ipoCorporate(sim, 'techcorp');
+  if (ipo2.ok) throw new Error('ipoCorporate duplicate should fail');
+
+  // ---- dividen butuh IPO ----
+  const div = corp.dividendCorporate(sim, 'techcorp');
+  if (!div.ok) throw new Error('dividendCorporate should succeed: ' + div.msg);
+
+  // ---- acquire perusahaan lain ----
+  const acq = corp.acquireCorporate(sim, 'mediaco');
+  if (!acq.ok) throw new Error('acquireCorporate should succeed: ' + acq.msg);
+  if (!sim.corporate.owned.some((c) => c.id === 'mediaco')) throw new Error('mediaco should be owned');
+
+  // ---- corporateValue & tick ----
+  if (corp.corporateValue(sim) <= 0) throw new Error('corporateValue should be > 0');
+  const cashBefore = sim.cash;
+  corp.corporateTick(sim);
+  if (sim.cash <= cashBefore) throw new Error('corporateTick should add revenue');
+
+  // ---- normalizeCorporate ----
+  const norm = corp.normalizeCorporate({ owned: [{ id: 'techcorp', level: 3, employees: 5, reputation: 70, ipo: true, sharesOutstanding: 1000, playerShares: 60, acquiredAt: 1 }], lastTick: 10 });
+  if (!norm.owned[0] || norm.owned[0].level !== 3) throw new Error('normalizeCorporate should keep level');
+  if (norm.owned[0].ipo !== true) throw new Error('normalizeCorporate should keep ipo');
+
+  console.log('corporate & bisnis: buy/hire/upgrade/ipo/dividen/acquire/tick/normalize ok');
 }

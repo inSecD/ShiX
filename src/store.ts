@@ -26,6 +26,7 @@ import {
 } from './sim/world';
 import { buyAsset, normalizeLifestyle, sellAsset } from './sim/lifestyle';
 import { buyBusiness, normalizeBusiness, upgradeBusiness } from './sim/business';
+import { normalizeCorporate, buyCorporate, hireCorporate, upgradeCorporate, ipoCorporate, acquireCorporate, dividendCorporate } from './sim/corporate';
 import { feedFromYou, normalizeFeed, toggleLike, toggleRepost } from './sim/feed';
 import {
   applyJob,
@@ -204,6 +205,7 @@ function normalizeSim(sim: SimState, startingCash: number): SimState {
   sim.lifestyle = normalizeLifestyle(sim.lifestyle, sim.ticks);
   sim.hub = normalizeHub(sim.hub);
   sim.business = normalizeBusiness(sim.business, sim.ticks);
+  sim.corporate = normalizeCorporate(sim.corporate);
   sim.life = normalizeLife(sim.life);
   sim.encounter = normalizeEncounter(sim.encounter);
   sim.quests = normalizeQuest(sim.quests);
@@ -384,6 +386,13 @@ interface Store {
 
   businessBuy: (businessId: string) => void;
   businessUpgrade: (businessId: string) => void;
+
+  corpBuy: (companyId: string) => void;
+  corpHire: (companyId: string) => void;
+  corpUpgrade: (companyId: string) => void;
+  corpIpo: (companyId: string) => void;
+  corpAcquire: (companyId: string) => void;
+  corpDividend: (companyId: string) => void;
 
   publishPost: (text: string, media?: PostMedia | null) => void;
   toggleFollow: (botId: string) => void;
@@ -874,6 +883,48 @@ export const useStore = create<Store>((set, get) => ({
     const res = upgradeBusiness(sim, businessId);
     notify(res.msg, res.ok ? 'ok' : 'err');
     if (res.ok) feedFromYou(sim, `${res.msg}. Expand terus.`, 'Bisnis');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  corpBuy: (companyId) => {
+    const { sim, notify } = get();
+    const res = buyCorporate(sim, companyId);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  corpHire: (companyId) => {
+    const { sim, notify } = get();
+    const res = hireCorporate(sim, companyId);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  corpUpgrade: (companyId) => {
+    const { sim, notify } = get();
+    const res = upgradeCorporate(sim, companyId);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  corpIpo: (companyId) => {
+    const { sim, notify } = get();
+    const res = ipoCorporate(sim, companyId);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  corpAcquire: (companyId) => {
+    const { sim, notify } = get();
+    const res = acquireCorporate(sim, companyId);
+    notify(res.msg, res.ok ? 'ok' : 'err');
+    set((s) => ({ v: s.v + 1 }));
+  },
+
+  corpDividend: (companyId) => {
+    const { sim, notify } = get();
+    const res = dividendCorporate(sim, companyId);
+    notify(res.msg, res.ok ? 'ok' : 'err');
     set((s) => ({ v: s.v + 1 }));
   },
 

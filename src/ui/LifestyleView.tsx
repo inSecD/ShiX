@@ -19,6 +19,10 @@ import {
   upgradeCost,
   type BusinessDef
 } from '../sim/business';
+import {
+  CORPORATE_DEFS,
+  corporateValue
+} from '../sim/corporate';
 import { activePerks, perkHint } from '../sim/perks';
 
 const CATS: { key: AssetCategory; label: string }[] = [
@@ -116,6 +120,13 @@ export function LifestyleView() {
   const bizUpkeep = businessDailyUpkeep(bs);
   const perks = activePerks(sim);
 
+  const corpBuy = useStore((s) => s.corpBuy);
+  const corpHire = useStore((s) => s.corpHire);
+  const corpUpgrade = useStore((s) => s.corpUpgrade);
+  const corpIpo = useStore((s) => s.corpIpo);
+  const corpAcquire = useStore((s) => s.corpAcquire);
+  const corpDividend = useStore((s) => s.corpDividend);
+
   return (
     <div className="lifestyle">
       <div className="panel">
@@ -205,6 +216,95 @@ export function LifestyleView() {
             <div className="tiny muted">
               Nilai total bisnis {fmtUsd(bs.owned.reduce((s, b) => s + businessValueOf(BUSINESS_DEFS.find((d) => d.id === b.id)!, b.level), 0), true)} ·
               masuk ke kekayaan bersih
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="panel">
+        <div className="panel-head">
+          <span>Corporate Empire</span>
+          <span className="badge">
+            {sim.corporate.owned.length} perusahaan · nilai {fmtUsd(corporateValue(sim), true)}
+          </span>
+        </div>
+        <div className="asset-list">
+          {CORPORATE_DEFS.map((def) => {
+            const inst = sim.corporate.owned.find((c) => c.id === def.id);
+            const owned = !!inst;
+            return (
+              <div className={`asset-row${owned ? ' owned' : ''}`} key={def.id}>
+                <span className="asset-ico">{def.icon}</span>
+                <div className="asset-copy">
+                  <div className="asset-name">{def.name}</div>
+                  <div className="tiny muted">{def.desc}</div>
+                  {owned && inst ? (
+                    <div className="tiny muted">
+                      Lv.{inst.level} · {inst.employees} karyawan · rep {Math.round(inst.reputation)} ·{' '}
+                      {inst.ipo ? `IPO (${inst.playerShares}% saham)` : 'privat'}
+                    </div>
+                  ) : (
+                    <div className="tiny muted">
+                      Tier {def.tier} · rev ~{fmtUsd(def.baseRevenue)}/jam · max {def.maxEmployees} karyawan
+                    </div>
+                  )}
+                </div>
+                <div className="asset-actions">
+                  {!owned ? (
+                    <>
+                      <button
+                        className="short"
+                        disabled={sim.cash < def.price}
+                        onClick={() => corpBuy(def.id)}
+                      >
+                        Beli {fmtUsd(def.price, true)}
+                      </button>
+                      <button
+                        className="short"
+                        disabled={sim.cash < Math.round(def.price * 1.3)}
+                        onClick={() => corpAcquire(def.id)}
+                      >
+                        Akuisisi {fmtUsd(Math.round(def.price * 1.3), true)}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        className="short"
+                        disabled={inst!.employees >= def.maxEmployees * inst!.level}
+                        onClick={() => corpHire(def.id)}
+                      >
+                        +Hire
+                      </button>
+                      <button
+                        className="short"
+                        disabled={inst!.level >= def.maxLevel}
+                        onClick={() => corpUpgrade(def.id)}
+                      >
+                        Upgrade
+                      </button>
+                      {!inst!.ipo && inst!.level >= 2 && inst!.employees >= 3 && (
+                        <button className="short" onClick={() => corpIpo(def.id)}>
+                          IPO
+                        </button>
+                      )}
+                      {inst!.ipo && (
+                        <button className="short" onClick={() => corpDividend(def.id)}>
+                          Dividen
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {sim.corporate.owned.length > 0 && (
+          <div className="panel-body">
+            <div className="tiny muted">
+              Nilai korporasi {fmtUsd(corporateValue(sim), true)} · pendapatan masuk ke cash tiap jam ·
+              karyawan & reputasi mempengaruhi revenue
             </div>
           </div>
         )}
