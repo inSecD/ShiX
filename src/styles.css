@@ -1,23 +1,25 @@
 :root {
-  --bg: #07090f;
-  --bg2: #0d111a;
-  --bg3: #141a26;
-  --line: #1e2634;
-  --line2: #2a3446;
-  --txt: #e6edf7;
-  --dim: #7d8aa0;
-  --dim2: #556175;
-  --up: #16d09a;
-  --up-dim: rgba(22, 208, 154, 0.14);
-  --down: #ff4d6a;
-  --down-dim: rgba(255, 77, 106, 0.14);
-  --accent: #4d8dff;
-  --accent-dim: rgba(77, 141, 255, 0.14);
-  --warn: #ffb648;
-  --purple: #a86bff;
+  --bg: #0a0c12;
+  --bg2: #10131c;
+  --bg3: #181c28;
+  --line: #232838;
+  --line2: #2e3448;
+  --txt: #f1f3f9;
+  --dim: #8b93a8;
+  --dim2: #5a6278;
+  --up: #2dd4bf;
+  --up-dim: rgba(45, 212, 191, 0.14);
+  --down: #f87171;
+  --down-dim: rgba(248, 113, 113, 0.14);
+  --accent: #f5a623;
+  --accent-dim: rgba(245, 166, 35, 0.16);
+  --warn: #fbbf24;
+  --purple: #a78bfa;
   --safe-t: env(safe-area-inset-top, 0px);
   --safe-b: env(safe-area-inset-bottom, 0px);
   --mono: 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+  --radius: 14px;
+  --radius-sm: 10px;
 }
 
 * {
@@ -52,16 +54,18 @@ select {
   color: var(--txt);
   background: var(--bg3);
   border: 1px solid var(--line2);
-  border-radius: 8px;
-  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
   width: 100%;
   outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 input:focus,
 textarea:focus,
 select:focus {
   border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
 }
 
 button {
@@ -71,31 +75,35 @@ button {
   color: var(--txt);
   background: var(--bg3);
   border: 1px solid var(--line2);
-  border-radius: 8px;
-  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
   cursor: pointer;
+  transition: transform 0.08s, background 0.15s, border-color 0.15s;
 }
 
 button:active {
-  transform: scale(0.98);
+  transform: scale(0.97);
 }
 
 button.primary {
-  background: var(--accent);
+  background: linear-gradient(135deg, var(--accent), #e8941a);
   border-color: var(--accent);
-  color: #fff;
+  color: #1a1206;
+  font-weight: 700;
 }
 
 button.long {
   background: var(--up);
   border-color: var(--up);
   color: #04140e;
+  font-weight: 700;
 }
 
 button.short {
   background: var(--down);
   border-color: var(--down);
   color: #fff;
+  font-weight: 700;
 }
 
 button.ghost {
@@ -113,14 +121,18 @@ button:disabled {
   padding-top: calc(var(--safe-t) + 0px);
   min-height: 100dvh;
   padding-bottom: calc(var(--safe-b) + 62px);
+  background:
+    radial-gradient(1200px 600px at 20% -10%, rgba(245, 166, 35, 0.08), transparent 60%),
+    radial-gradient(900px 500px at 90% 10%, rgba(45, 212, 191, 0.06), transparent 60%),
+    var(--bg);
 }
 
 .topbar {
   position: sticky;
   top: 0;
   z-index: 30;
-  background: rgba(7, 9, 15, 0.92);
-  backdrop-filter: blur(12px);
+  background: rgba(10, 12, 18, 0.85);
+  backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--line);
 }
 
@@ -221,29 +233,31 @@ button:disabled {
   bottom: 0;
   z-index: 40;
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  background: rgba(10, 13, 21, 0.96);
-  backdrop-filter: blur(14px);
+  grid-template-columns: repeat(5, 1fr);
+  background: rgba(10, 12, 18, 0.9);
+  backdrop-filter: blur(16px);
   border-top: 1px solid var(--line);
   padding-bottom: var(--safe-b);
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.3);
 }
 
 .nav-btn {
   background: none;
   border: none;
   border-radius: 0;
-  padding: 8px 2px 7px;
+  padding: 9px 2px 7px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 3px;
   color: var(--dim2);
-  font-size: 8.5px;
-  letter-spacing: 0.2px;
+  font-size: 9px;
+  letter-spacing: 0.3px;
+  transition: color 0.15s;
 }
 
 .nav-btn .ico {
-  font-size: 17px;
+  font-size: 19px;
   line-height: 1;
 }
 
@@ -252,14 +266,19 @@ button:disabled {
   background: linear-gradient(180deg, transparent, var(--accent-dim));
 }
 
+.nav-btn.on .ico {
+  transform: translateY(-1px);
+}
+
 /* ---------- generic panels ---------- */
 
 .panel {
-  background: var(--bg2);
+  background: linear-gradient(180deg, var(--bg2), var(--bg));
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius);
   margin: 10px;
   overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
 }
 
 .panel-head {
@@ -1054,7 +1073,7 @@ input[type='range']::-webkit-slider-thumb {
 }
 
 .bottom-nav {
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(5, 1fr);
 }
 
 .nav-btn {
