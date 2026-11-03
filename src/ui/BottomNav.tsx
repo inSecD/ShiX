@@ -4,10 +4,8 @@ const TABS: { id: Tab; icon: string; label: string }[] = [
   { id: 'home', icon: '🏠', label: 'Home' },
   { id: 'market', icon: '📊', label: 'Market' },
   { id: 'social', icon: '🐦', label: 'CT' },
-  { id: 'world', icon: '🌍', label: 'World' },
-  { id: 'portfolio', icon: '💼', label: 'Porto' },
   { id: 'hub', icon: '🚶', label: 'Jalan' },
-  { id: 'rank', icon: '🏆', label: 'Rank' }
+  { id: 'more', icon: '☰', label: 'Menu' }
 ];
 
 export function BottomNav() {
@@ -17,6 +15,7 @@ export function BottomNav() {
   const active = (id: Tab) => {
     if (tab === id) return true;
     if (id === 'market' && tab === 'trade') return true;
+    if (id === 'more' && ['world', 'portfolio', 'rank', 'news', 'launchpad', 'modes', 'lifestyle', 'settings', 'trade'].includes(tab)) return true;
     return false;
   };
 

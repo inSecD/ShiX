@@ -1,6 +1,8 @@
 import { useStore, type Tab } from '../store';
 
 const ITEMS: { tab: Tab; icon: string; title: string; desc: string }[] = [
+  { tab: 'portfolio', icon: '💼', title: 'Portfolio', desc: 'Posisi, spot, P&L, equity curve' },
+  { tab: 'rank', icon: '🏆', title: 'Peringkat', desc: 'Leaderboard global & skor' },
   { tab: 'world', icon: '🌍', title: 'Dunia', desc: 'Komoditas, rute kirim, pabrik, dan pasar gelap' },
   { tab: 'news', icon: '📰', title: 'Berita', desc: 'Headline makro, whale, dan event pasar' },
   { tab: 'launchpad', icon: '🚀', title: 'Launchpad', desc: 'Luncurkan token, bonding curve, cek rug risk' },

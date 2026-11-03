@@ -4098,3 +4098,50 @@ input[type='range']::-webkit-slider-thumb {
   font-size: 13px;
   color: var(--dim);
 }
+
+/* ---------- Empire tabs (UI/UX overhaul) ---------- */
+.lifestyle[data-section="bisnis"] .empire-corporate,
+.lifestyle[data-section="bisnis"] .empire-politik,
+.lifestyle[data-section="bisnis"] .empire-legacy { display: none; }
+
+.lifestyle[data-section="corporate"] .empire-bisnis,
+.lifestyle[data-section="corporate"] .empire-politik,
+.lifestyle[data-section="corporate"] .empire-legacy { display: none; }
+
+.lifestyle[data-section="politik"] .empire-bisnis,
+.lifestyle[data-section="politik"] .empire-corporate,
+.lifestyle[data-section="politik"] .empire-legacy { display: none; }
+
+.lifestyle[data-section="legacy"] .empire-bisnis,
+.lifestyle[data-section="legacy"] .empire-corporate,
+.lifestyle[data-section="legacy"] .empire-politik { display: none; }
+
+.empire-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 8px 0 4px;
+  scrollbar-width: none;
+}
+
+.empire-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.empire-tab {
+  flex: 0 0 auto;
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line2);
+  background: #141a26;
+  color: var(--dim);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.empire-tab.on {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--txt);
+}

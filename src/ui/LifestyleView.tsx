@@ -1,4 +1,5 @@
 import { useStore } from '../store';
+import { useState } from 'react';
 import { fmtUsd } from '../lib/format';
 import {
   ASSET_DEFS,
@@ -136,8 +137,10 @@ export function LifestyleView() {
   const legacyClaim = useStore((s) => s.legacyClaim);
   const legacyNameHeir = useStore((s) => s.legacyNameHeir);
 
+  const [section, setSection] = useState<'bisnis' | 'corporate' | 'politik' | 'legacy'>('bisnis');
+
   return (
-    <div className="lifestyle">
+    <div className="lifestyle" data-section={section}>
       <div className="panel">
         <div className="panel-head">
           <span>Gaya Hidup</span>
@@ -205,7 +208,19 @@ export function LifestyleView() {
         );
       })}
 
-      <div className="panel">
+      <div className="empire-tabs">
+        {(['bisnis', 'corporate', 'politik', 'legacy'] as const).map((s) => (
+          <button
+            key={s}
+            className={`empire-tab${section === s ? ' on' : ''}`}
+            onClick={() => setSection(s)}
+          >
+            {s === 'bisnis' ? 'Bisnis' : s === 'corporate' ? 'Corporate' : s === 'politik' ? 'Politik' : 'Legacy'}
+          </button>
+        ))}
+      </div>
+
+      <div className="panel empire-bisnis">
         <div className="panel-head">
           <span>Imperium Bisnis</span>
           <span className="badge">
@@ -230,7 +245,7 @@ export function LifestyleView() {
         )}
       </div>
 
-      <div className="panel">
+      <div className="panel empire-corporate">
         <div className="panel-head">
           <span>Corporate Empire</span>
           <span className="badge">
@@ -319,7 +334,7 @@ export function LifestyleView() {
         )}
       </div>
 
-      <div className="panel">
+      <div className="panel empire-politik">
         <div className="panel-head">
           <span>Politik & Kebijakan</span>
           <span className="badge">
@@ -374,7 +389,7 @@ export function LifestyleView() {
         </div>
       </div>
 
-      <div className="panel">
+      <div className="panel empire-legacy">
         <div className="panel-head">
           <span>Legacy & Dinasti</span>
           <span className="badge">
