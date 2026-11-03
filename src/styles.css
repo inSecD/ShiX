@@ -1382,8 +1382,19 @@ input[type='range']::-webkit-slider-thumb {
   min-width: 0;
   background: var(--bg2);
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius);
   overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.tradingview-widget-container {
+  width: 100%;
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.tradingview-widget-container__widget {
+  width: 100%;
 }
 
 .market-side {
