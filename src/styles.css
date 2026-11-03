@@ -285,65 +285,59 @@ button:disabled {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 9px 12px;
+  padding: 11px 14px;
   border-bottom: 1px solid var(--line);
-  font-size: 11px;
+  font-size: 12px;
   text-transform: uppercase;
-  letter-spacing: 0.8px;
+  letter-spacing: 0.9px;
   color: var(--dim);
   font-weight: 700;
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .panel-body {
-  padding: 12px;
+  padding: 14px;
 }
 
-.row {
+.asset-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  transition: background 0.15s;
 }
 
-.row.between {
-  justify-content: space-between;
+.asset-row:active {
+  background: rgba(255, 255, 255, 0.03);
 }
 
-.grid2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+.asset-row.owned {
+  background: var(--accent-dim);
+  border-left: 3px solid var(--accent);
 }
 
-.grid3 {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
+.asset-ico {
+  font-size: 24px;
+  width: 38px;
+  text-align: center;
+  flex: 0 0 auto;
 }
 
-.field {
-  margin-bottom: 10px;
+.asset-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.field > label {
-  display: block;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  color: var(--dim2);
-  margin-bottom: 4px;
-  font-weight: 700;
-}
-
-.muted {
-  color: var(--dim);
-}
-
-.tiny {
-  font-size: 10px;
-}
-
-.mono {
-  font-family: var(--mono);
+.asset-row .primary,
+.asset-row .short {
+  flex: 0 0 auto;
+  padding: 8px 14px;
+  font-size: 12px;
+  min-height: 36px;
 }
 
 .up {
@@ -4128,6 +4122,17 @@ input[type='range']::-webkit-slider-thumb {
   font-size: 13px;
   color: var(--dim);
 }
+
+/* ---------- restored generic helpers ---------- */
+.row { display: flex; align-items: center; gap: 8px; }
+.row.between { justify-content: space-between; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.field { margin-bottom: 10px; }
+.field > label { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--dim2); margin-bottom: 4px; font-weight: 700; }
+.muted { color: var(--dim); }
+.tiny { font-size: 10px; }
+.mono { font-family: var(--mono); }
 
 /* ---------- Empire tabs (UI/UX overhaul) ---------- */
 .lifestyle[data-section="bisnis"] .empire-corporate,
