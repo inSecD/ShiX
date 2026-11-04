@@ -1,5 +1,5 @@
 import { useStore } from '../store';
-import { TradingViewChart, tvSymbolFor } from './TradingViewChart';
+import { ChartView } from './ChartView';
 import { MarketView } from './MarketView';
 import { TradePanel } from './TradePanel';
 
@@ -7,6 +7,7 @@ export function MarketScreen() {
   const sim = useStore((s) => s.sim);
   const v = useStore((s) => s.v);
   const selectedId = useStore((s) => s.selectedId);
+  const tf = useStore((s) => s.tf);
   void v;
 
   const inst = sim.instruments[selectedId];
@@ -15,7 +16,7 @@ export function MarketScreen() {
     <div className="market-screen">
       {inst ? (
         <div className="market-chart-card">
-          <TradingViewChart symbol={tvSymbolFor(inst)} height={360} />
+          <ChartView inst={inst} tf={tf} />
         </div>
       ) : (
         <div className="empty">Pilih instrumen dulu</div>

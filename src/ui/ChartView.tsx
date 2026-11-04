@@ -103,7 +103,7 @@ export function ChartView({ inst, tf }: Props) {
     ctx.clearRect(0, 0, w, H);
 
     if (!data.length) {
-      ctx.fillStyle = '#556175';
+      ctx.fillStyle = '#5a6278';
       ctx.font = '12px sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('Belum ada data', w / 2, H / 2);
@@ -138,10 +138,10 @@ export function ChartView({ inst, tf }: Props) {
     const yOf = (p: number) => ((hi - p) / (hi - lo)) * (H - VOL - 10) + 6;
 
     // grid
-    ctx.strokeStyle = '#161d29';
+    ctx.strokeStyle = '#1a1e2a';
     ctx.lineWidth = 1;
     ctx.font = '9px monospace';
-    ctx.fillStyle = '#556175';
+    ctx.fillStyle = '#5a6278';
     ctx.textAlign = 'left';
     for (let i = 0; i <= 4; i++) {
       const y = 6 + ((H - VOL - 16) / 4) * i;
@@ -158,7 +158,7 @@ export function ChartView({ inst, tf }: Props) {
       const c = slice[i];
       const prev = i > 0 ? slice[i - 1].c : c.o;
       const up = c.c >= prev;
-      ctx.fillStyle = up ? 'rgba(22,208,154,0.35)' : 'rgba(255,77,106,0.35)';
+      ctx.fillStyle = up ? 'rgba(45,212,191,0.35)' : 'rgba(248,113,113,0.35)';
       const vh = maxVol > 0 ? (c.v / maxVol) * (VOL - 14) : 0;
       ctx.fillRect(i * bw + (bw - cw) / 2, H - vh - 4, cw, vh);
     }
@@ -169,7 +169,7 @@ export function ChartView({ inst, tf }: Props) {
       const prev = i > 0 ? slice[i - 1].c : c.o;
       const up = c.c >= prev;
       const x = i * bw + bw / 2;
-      const color = up ? '#16d09a' : '#ff4d6a';
+      const color = up ? '#2dd4bf' : '#f87171';
       ctx.strokeStyle = color;
       ctx.fillStyle = color;
       ctx.lineWidth = 1;
@@ -201,8 +201,8 @@ export function ChartView({ inst, tf }: Props) {
         }
         ctx.stroke();
       };
-      drawLine(e20, 'rgba(77,141,255,0.9)');
-      drawLine(e50, 'rgba(168,107,255,0.9)');
+      drawLine(e20, 'rgba(245,166,35,0.9)');
+      drawLine(e50, 'rgba(167,139,250,0.9)');
     }
 
     // last price line
@@ -215,7 +215,7 @@ export function ChartView({ inst, tf }: Props) {
     ctx.lineTo(plotW, yl);
     ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = last.c >= (slice[slice.length - 2]?.c ?? last.c) ? '#16d09a' : '#ff4d6a';
+    ctx.fillStyle = last.c >= (slice[slice.length - 2]?.c ?? last.c) ? '#2dd4bf' : '#f87171';
     ctx.fillRect(plotW + 1, yl - 8, padR - 2, 16);
     ctx.fillStyle = '#04140e';
     ctx.font = 'bold 9.5px monospace';
